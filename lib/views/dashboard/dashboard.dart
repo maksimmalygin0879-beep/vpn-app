@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:honey_utility/common/common.dart';
 import 'package:honey_utility/controller.dart';
 import 'package:honey_utility/enum/enum.dart';
@@ -10,6 +12,7 @@ import 'package:honey_utility/views/proxies/common.dart';
 import 'package:honey_utility/widgets/widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:yaml/yaml.dart';
 
 import 'widgets/network_speed.dart';
 import 'widgets/outbound_mode.dart';
@@ -76,14 +79,12 @@ class _DashboardViewState extends ConsumerState<DashboardView> {
       ],
       body: Column(
         children: [
-          // stats: network speed full width
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
             child: Column(
               children: [
                 _StatCard(child: const NetworkSpeed()),
                 const SizedBox(height: 10),
-                // mode selector + traffic usage in one row
                 IntrinsicHeight(
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -98,7 +99,6 @@ class _DashboardViewState extends ConsumerState<DashboardView> {
             ),
           ),
           const SizedBox(height: 12),
-          // page indicator
           ListenableBuilder(
             listenable: _pageController,
             builder: (_, __) {
@@ -109,7 +109,6 @@ class _DashboardViewState extends ConsumerState<DashboardView> {
             },
           ),
           const SizedBox(height: 8),
-          // main swipeable area
           Expanded(
             child: PageView.builder(
               controller: _pageController,
@@ -125,11 +124,10 @@ class _DashboardViewState extends ConsumerState<DashboardView> {
                 }
                 final profile = profiles[index];
                 return _ProfilePage(
+                  key: ValueKey(profile.id),
                   profile: profile,
                   isActive: profile.id == currentProfileId,
                   coreStatus: coreStatus,
-                  pageIndex: index,
-                  totalProfiles: profiles.length,
                   onPrev: index > 0 ? () => _goToPage(index - 1) : null,
                   onNext: () => _goToPage(index + 1),
                 );
@@ -199,7 +197,6 @@ class _AddPage extends StatelessWidget {
       padding: const EdgeInsets.all(24),
       child: Column(
         children: [
-          // back arrow row
           Row(
             children: [
               if (onPrev != null)
@@ -207,7 +204,8 @@ class _AddPage extends StatelessWidget {
                   onPressed: onPrev,
                   icon: const Icon(Icons.chevron_left_rounded, size: 28),
                   padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                  constraints:
+                      const BoxConstraints(minWidth: 32, minHeight: 32),
                 ),
             ],
           ),
@@ -259,17 +257,14 @@ class _ProfilePage extends ConsumerStatefulWidget {
   final Profile profile;
   final bool isActive;
   final CoreStatus coreStatus;
-  final int pageIndex;
-  final int totalProfiles;
   final VoidCallback? onPrev;
   final VoidCallback onNext;
 
   const _ProfilePage({
+    super.key,
     required this.profile,
     required this.isActive,
     required this.coreStatus,
-    required this.pageIndex,
-    required this.totalProfiles,
     required this.onPrev,
     required this.onNext,
   });
@@ -279,25 +274,66 @@ class _ProfilePage extends ConsumerStatefulWidget {
 }
 
 class _ProfilePageState extends ConsumerState<_ProfilePage> {
+  List<String> _proxyNames = [];
   bool _pinging = false;
 
-  void _activateProfile() {
-    ref.read(currentProfileIdProvider.notifier).value = widget.profile.id;
-    appController.applyProfileDebounce();
+  @override
+  void initState() {
+    super.initState();
+    _loadProxyNames();
   }
 
-  Future<void> _selectProxy(String groupName, String proxyName) async {
-    if (!widget.isActive) {
-      _activateProfile();
-      await Future.delayed(const Duration(milliseconds: 400));
+  Future<void> _loadProxyNames() async {
+    try {
+      final file = await widget.profile.file;
+      if (!await file.exists()) return;
+      final content = await file.readAsString();
+      final doc = loadYaml(content);
+      final raw = doc['proxies'];
+      if (raw == null) return;
+      final names = <String>[];
+      for (final p in raw as YamlList) {
+        final name = (p as YamlMap)['name'];
+        if (name is String &&
+            name.isNotEmpty &&
+            !_kSpecialProxies.contains(name)) {
+          names.add(name);
+        }
+      }
+      if (mounted) setState(() => _proxyNames = names);
+    } catch (_) {}
+  }
+
+  Future<void> _selectProxy(String proxyName) async {
+    // Get the main group name from active groups or default
+    String? groupName;
+    if (widget.isActive) {
+      final groups = ref.read(groupsProvider);
+      groupName = groups.isEmpty ? null : groups.first.name;
     }
-    appController.changeProxyDebounce(groupName, proxyName);
+
+    if (!widget.isActive) {
+      ref.read(currentProfileIdProvider.notifier).value = widget.profile.id;
+      appController.applyProfileDebounce();
+      await Future.delayed(const Duration(milliseconds: 800));
+      // re-read group name after activation
+      final groups = ref.read(groupsProvider);
+      groupName = groups.isEmpty ? null : groups.first.name;
+    }
+
+    if (groupName != null) {
+      appController.changeProxyDebounce(groupName, proxyName);
+    }
     if (widget.coreStatus != CoreStatus.connected) {
       appController.updateStatus(true);
     }
   }
 
-  Future<void> _ping(Group group) async {
+  Future<void> _ping() async {
+    if (!widget.isActive) return;
+    final groups = ref.read(groupsProvider);
+    if (groups.isEmpty) return;
+    final group = groups.first;
     setState(() => _pinging = true);
     try {
       await delayTest(group.all, group.testUrl);
@@ -317,17 +353,21 @@ class _ProfilePageState extends ConsumerState<_ProfilePage> {
         widget.isActive && widget.coreStatus == CoreStatus.connected;
 
     final mainGroup = groups.isEmpty ? null : groups.first;
-    final proxies = mainGroup?.all
+    final selectedProxy = mainGroup?.now ?? '';
+
+    // Use live proxy list when active, fallback to parsed YAML
+    final liveProxies = mainGroup?.all
             .where((p) => !_kSpecialProxies.contains(p.name))
+            .map((p) => p.name)
             .toList() ??
         [];
-    final selectedProxy = mainGroup?.now ?? '';
+    final displayNames = liveProxies.isNotEmpty ? liveProxies : _proxyNames;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
       child: Column(
         children: [
-          // profile header row with arrows
+          // header row with arrows and title
           Row(
             children: [
               if (widget.onPrev != null)
@@ -370,171 +410,117 @@ class _ProfilePageState extends ConsumerState<_ProfilePage> {
               ),
             ],
           ),
-          const SizedBox(height: 8),
-          // body: not active → activate button; active → server list
+          // ping button (only when active)
+          if (widget.isActive && mainGroup != null)
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                _pinging
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : TextButton.icon(
+                        onPressed: _ping,
+                        icon: const Icon(Icons.network_ping, size: 16),
+                        label: Text(
+                          appLocalizations.delayTest,
+                          style: context.textTheme.labelSmall,
+                        ),
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 4),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                      ),
+              ],
+            ),
+          // servers list
           Expanded(
-            child: !widget.isActive
+            child: displayNames.isEmpty
                 ? Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.play_circle_outline,
-                          size: 48,
-                          color: context.colorScheme.primary.withOpacity(0.6),
-                        ),
-                        const SizedBox(height: 12),
-                        FilledButton(
-                          onPressed: _activateProfile,
-                          style: FilledButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 32, vertical: 12),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                          child: const Text('Выбрать профиль'),
-                        ),
-                      ],
+                    child: Text(
+                      'Нет серверов',
+                      style: context.textTheme.bodySmall?.copyWith(
+                        color: context.colorScheme.onSurface.withOpacity(0.4),
+                      ),
                     ),
                   )
-                : Column(
-                    children: [
-                      // ping button
-                      if (mainGroup != null)
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.end,
-                          children: [
-                            _pinging
-                                ? const SizedBox(
-                                    width: 18,
-                                    height: 18,
-                                    child: CircularProgressIndicator(
-                                        strokeWidth: 2),
-                                  )
-                                : TextButton.icon(
-                                    onPressed: () => _ping(mainGroup),
-                                    icon: const Icon(Icons.network_ping,
-                                        size: 16),
-                                    label: Text(
-                                      appLocalizations.delayTest,
-                                      style: context.textTheme.labelSmall,
-                                    ),
-                                    style: TextButton.styleFrom(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 8, vertical: 4),
-                                      minimumSize: Size.zero,
-                                      tapTargetSize:
-                                          MaterialTapTargetSize.shrinkWrap,
-                                    ),
-                                  ),
-                          ],
-                        ),
-                      // servers list
-                      Expanded(
-                        child: proxies.isEmpty
-                            ? Center(
-                                child: Text(
-                                  'Загрузка серверов...',
-                                  style: context.textTheme.bodySmall?.copyWith(
-                                    color: context.colorScheme.onSurface
-                                        .withOpacity(0.4),
+                : ListView.separated(
+                    itemCount: displayNames.length,
+                    separatorBuilder: (_, __) => const Divider(height: 1),
+                    itemBuilder: (context, i) {
+                      final name = displayNames[i];
+                      final groupDelays =
+                          mainGroup != null ? delayMap[mainGroup.name] : null;
+                      final delay = groupDelays?[name];
+                      final isSelected =
+                          widget.isActive && name == selectedProxy;
+
+                      return InkWell(
+                        onTap: () => _selectProxy(name),
+                        borderRadius: BorderRadius.circular(10),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 12,
+                          ),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(10),
+                            color: isSelected
+                                ? context.colorScheme.primary.withOpacity(0.12)
+                                : Colors.transparent,
+                          ),
+                          child: Row(
+                            children: [
+                              if (isSelected)
+                                Container(
+                                  width: 3,
+                                  height: 20,
+                                  margin: const EdgeInsets.only(right: 10),
+                                  decoration: BoxDecoration(
+                                    color: context.colorScheme.primary,
+                                    borderRadius: BorderRadius.circular(2),
                                   ),
                                 ),
-                              )
-                            : ListView.separated(
-                                itemCount: proxies.length,
-                                separatorBuilder: (_, __) =>
-                                    const Divider(height: 1),
-                                itemBuilder: (context, i) {
-                                  final proxy = proxies[i];
-                                  final groupDelays = mainGroup != null
-                                      ? delayMap[mainGroup.name]
-                                      : null;
-                                  final delay = groupDelays?[proxy.name];
-                                  final isSelected = proxy.name ==
-                                          selectedProxy &&
-                                      widget.isActive;
-
-                                  return InkWell(
-                                    onTap: mainGroup != null
-                                        ? () => _selectProxy(
-                                            mainGroup.name, proxy.name)
-                                        : null,
-                                    borderRadius: BorderRadius.circular(10),
-                                    child: AnimatedContainer(
-                                      duration:
-                                          const Duration(milliseconds: 200),
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 14,
-                                        vertical: 12,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        borderRadius:
-                                            BorderRadius.circular(10),
-                                        color: isSelected
-                                            ? context.colorScheme.primary
-                                                .withOpacity(0.12)
-                                            : Colors.transparent,
-                                      ),
-                                      child: Row(
-                                        children: [
-                                          if (isSelected)
-                                            Container(
-                                              width: 3,
-                                              height: 20,
-                                              margin: const EdgeInsets.only(
-                                                  right: 10),
-                                              decoration: BoxDecoration(
-                                                color: context
-                                                    .colorScheme.primary,
-                                                borderRadius:
-                                                    BorderRadius.circular(2),
-                                              ),
-                                            ),
-                                          Expanded(
-                                            child: Text(
-                                              proxy.name,
-                                              style: context
-                                                  .textTheme.bodyMedium
-                                                  ?.copyWith(
-                                                fontWeight: isSelected
-                                                    ? FontWeight.w600
-                                                    : FontWeight.normal,
-                                              ),
-                                            ),
-                                          ),
-                                          if (delay != null && delay > 0)
-                                            Text(
-                                              '${delay}ms',
-                                              style: context
-                                                  .textTheme.labelSmall
-                                                  ?.copyWith(
-                                                color: delay < 200
-                                                    ? Colors.green
-                                                    : delay < 500
-                                                        ? Colors.orange
-                                                        : Colors.red,
-                                                fontWeight: FontWeight.w600,
-                                              ),
-                                            ),
-                                          if (isSelected) ...[
-                                            const SizedBox(width: 8),
-                                            Icon(
-                                              Icons.check_circle,
-                                              size: 16,
-                                              color:
-                                                  context.colorScheme.primary,
-                                            ),
-                                          ],
-                                        ],
-                                      ),
-                                    ),
-                                  );
-                                },
+                              Expanded(
+                                child: Text(
+                                  name,
+                                  style: context.textTheme.bodyMedium?.copyWith(
+                                    fontWeight: isSelected
+                                        ? FontWeight.w600
+                                        : FontWeight.normal,
+                                  ),
+                                ),
                               ),
-                      ),
-                    ],
+                              if (delay != null && delay > 0)
+                                Text(
+                                  '${delay}ms',
+                                  style: context.textTheme.labelSmall?.copyWith(
+                                    color: delay < 200
+                                        ? Colors.green
+                                        : delay < 500
+                                            ? Colors.orange
+                                            : Colors.red,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              if (isSelected) ...[
+                                const SizedBox(width: 8),
+                                Icon(
+                                  Icons.check_circle,
+                                  size: 16,
+                                  color: context.colorScheme.primary,
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      );
+                    },
                   ),
           ),
         ],
