@@ -142,6 +142,7 @@ class _ProfilesViewState extends State<ProfilesView> {
                                         .read(currentProfileIdProvider.notifier)
                                         .value =
                                     profileId;
+                                appController.applyProfileDebounce();
                               },
                             ),
                           ),

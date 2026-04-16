@@ -322,6 +322,7 @@ extension ProfilesControllerExt on AppController {
     _ref.read(profilesProvider.notifier).put(profile);
     if (_ref.read(currentProfileIdProvider) != null) return;
     _ref.read(currentProfileIdProvider.notifier).value = profile.id;
+    applyProfileDebounce();
   }
 
   Future<void> updateProfiles() async {
