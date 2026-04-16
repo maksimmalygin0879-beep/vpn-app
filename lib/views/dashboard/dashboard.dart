@@ -1,389 +1,320 @@
-import 'dart:math';
-
-import 'package:defer_pointer/defer_pointer.dart';
 import 'package:honey_utility/common/common.dart';
 import 'package:honey_utility/controller.dart';
 import 'package:honey_utility/enum/enum.dart';
+import 'package:honey_utility/models/models.dart';
 import 'package:honey_utility/providers/providers.dart';
 import 'package:honey_utility/state.dart';
+import 'package:honey_utility/views/profiles/add.dart';
+import 'package:honey_utility/views/proxies/common.dart';
 import 'package:honey_utility/widgets/widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'widgets/start_button.dart';
+import 'widgets/network_speed.dart';
+import 'widgets/traffic_usage.dart';
 
-typedef _IsEditWidgetBuilder = Widget Function(bool isEdit);
-
-class DashboardView extends ConsumerStatefulWidget {
+class DashboardView extends ConsumerWidget {
   const DashboardView({super.key});
 
-  @override
-  ConsumerState<DashboardView> createState() => _DashboardViewState();
-}
-
-class _DashboardViewState extends ConsumerState<DashboardView> {
-  final key = GlobalKey<SuperGridState>();
-  final _isEditNotifier = ValueNotifier<bool>(false);
-  final _addedWidgetsNotifier = ValueNotifier<List<GridItem>>([]);
-
-  @override
-  dispose() {
-    _isEditNotifier.dispose();
-    _addedWidgetsNotifier.dispose();
-    super.dispose();
-  }
-
-  Widget _buildIsEdit(_IsEditWidgetBuilder builder) {
-    return ValueListenableBuilder(
-      valueListenable: _isEditNotifier,
-      builder: (_, isEdit, _) {
-        return builder(isEdit);
-      },
-    );
-  }
-
-  Future<void> _handleConnection() async {
-    final coreStatus = ref.read(coreStatusProvider);
-    if (coreStatus == CoreStatus.connecting) {
-      return;
-    }
-    final tip = coreStatus == CoreStatus.connected
-        ? appLocalizations.forceRestartCoreTip
-        : appLocalizations.restartCoreTip;
-    final res = await globalState.showMessage(message: TextSpan(text: tip));
-    if (res != true) {
-      return;
-    }
-    appController.restartCore();
-  }
-
-  List<Widget> _buildActions(bool isEdit) {
-    return [
-      if (!isEdit)
-        Consumer(
-          builder: (_, ref, _) {
-            final coreStatus = ref.watch(coreStatusProvider);
-            return Tooltip(
-              message: appLocalizations.coreStatus,
-              child: FadeScaleBox(
-                alignment: Alignment.centerRight,
-                child: coreStatus == CoreStatus.connected
-                    ? IconButton.filled(
-                        visualDensity: VisualDensity.compact,
-                        iconSize: 20,
-                        padding: EdgeInsets.zero,
-                        style: IconButton.styleFrom(
-                          backgroundColor: Colors.greenAccent,
-                          foregroundColor: switch (Theme.brightnessOf(
-                            context,
-                          )) {
-                            Brightness.light =>
-                              context.colorScheme.onSurfaceVariant,
-                            Brightness.dark =>
-                              context.colorScheme.onPrimaryFixedVariant,
-                          },
-                        ),
-                        onPressed: _handleConnection,
-                        icon: Icon(Icons.check, fontWeight: FontWeight.w900),
-                      )
-                    : FilledButton.icon(
-                        key: ValueKey(coreStatus),
-                        onPressed: _handleConnection,
-                        style: FilledButton.styleFrom(
-                          visualDensity: VisualDensity.compact,
-                          padding: EdgeInsets.symmetric(horizontal: 12),
-                          backgroundColor: switch (coreStatus) {
-                            CoreStatus.connecting => null,
-                            CoreStatus.connected => Colors.greenAccent,
-                            CoreStatus.disconnected =>
-                              context.colorScheme.error,
-                          },
-                          foregroundColor: switch (coreStatus) {
-                            CoreStatus.connecting => null,
-                            CoreStatus.connected => switch (Theme.brightnessOf(
-                              context,
-                            )) {
-                              Brightness.light =>
-                                context.colorScheme.onSurfaceVariant,
-                              Brightness.dark => null,
-                            },
-                            CoreStatus.disconnected =>
-                              context.colorScheme.onError,
-                          },
-                        ),
-                        icon: SizedBox(
-                          height: globalState.measure.bodyMediumHeight,
-                          width: globalState.measure.bodyMediumHeight,
-                          child: switch (coreStatus) {
-                            CoreStatus.connecting => Padding(
-                              padding: EdgeInsets.all(2),
-                              child: CircularProgressIndicator(
-                                strokeWidth: 3,
-                                color: context.colorScheme.onPrimary,
-                                backgroundColor: Colors.transparent,
-                              ),
-                            ),
-                            CoreStatus.connected => Icon(
-                              Icons.check_sharp,
-                              fontWeight: FontWeight.w900,
-                            ),
-                            CoreStatus.disconnected => Icon(
-                              Icons.restart_alt_sharp,
-                              fontWeight: FontWeight.w900,
-                            ),
-                          },
-                        ),
-                        label: Text(switch (coreStatus) {
-                          CoreStatus.connecting => appLocalizations.connecting,
-                          CoreStatus.connected => appLocalizations.connected,
-                          CoreStatus.disconnected =>
-                            appLocalizations.disconnected,
-                        }),
-                      ),
-              ),
-            );
-          },
-        ),
-      if (isEdit)
-        ValueListenableBuilder(
-          valueListenable: _addedWidgetsNotifier,
-          builder: (_, addedChildren, child) {
-            if (addedChildren.isEmpty) {
-              return Container();
-            }
-            return child!;
-          },
-          child: IconButton(
-            onPressed: () {
-              _showAddWidgetsModal();
-            },
-            icon: Icon(Icons.add_circle),
-          ),
-        ),
-      FadeRotationScaleBox(
-        child: isEdit
-            ? IconButton(
-                key: ValueKey(true),
-                icon: Icon(Icons.save, key: ValueKey('save-icon')),
-                onPressed: _handleUpdateIsEdit,
-              )
-            : IconButton(
-                key: ValueKey(false),
-                icon: Icon(Icons.edit, key: ValueKey('edit-icon')),
-                onPressed: _handleUpdateIsEdit,
-              ),
-      ),
-    ];
-  }
-
-  void _showAddWidgetsModal() {
+  void _openAddProfile(BuildContext context) {
     showSheet(
-      builder: (_, type) {
-        return ValueListenableBuilder(
-          valueListenable: _addedWidgetsNotifier,
-          builder: (_, value, _) {
-            return AdaptiveSheetScaffold(
-              type: type,
-              body: _AddDashboardWidgetModal(
-                items: value,
-                onAdd: (gridItem) {
-                  key.currentState?.handleAdd(gridItem);
-                },
-              ),
-              title: appLocalizations.add,
-            );
-          },
-        );
-      },
       context: context,
+      builder: (_, type) => AdaptiveSheetScaffold(
+        type: type,
+        title: appLocalizations.addProfile,
+        body: AddProfileView(context: context),
+      ),
     );
   }
 
-  Future<void> _handleUpdateIsEdit() async {
-    if (_isEditNotifier.value == true) {
-      await _handleSave();
-    }
-    _isEditNotifier.value = !_isEditNotifier.value;
-  }
-
-  Future<void> _handleSave() async {
-    final currentState = key.currentState;
-    if (currentState == null) {
-      return;
-    }
-    if (mounted) {
-      await currentState.isTransformCompleter;
-      final dashboardWidgets = currentState.children
-          .map((item) => DashboardWidget.getDashboardWidget(item))
-          .toList();
-      ref
-          .read(appSettingProvider.notifier)
-          .update(
-            (state) => state.copyWith(dashboardWidgets: dashboardWidgets),
-          );
-    }
-  }
-
   @override
-  Widget build(BuildContext context) {
-    final dashboardState = ref.watch(dashboardStateProvider);
-    final columns = max(4 * ((dashboardState.contentWidth / 280).ceil()), 8);
-    final spacing = 14.mAp;
-    final children = [
-      ...dashboardState.dashboardWidgets
-          .where(
-            (item) => item.platforms.contains(SupportPlatform.currentPlatform),
-          )
-          .map((item) => item.widget),
-    ];
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _addedWidgetsNotifier.value = DashboardWidget.values
-          .where(
-            (item) =>
-                !children.contains(item.widget) &&
-                item.platforms.contains(SupportPlatform.currentPlatform),
-          )
-          .map((item) => item.widget)
-          .toList();
-    });
-    return _buildIsEdit(
-      (isEdit) => CommonScaffold(
+  Widget build(BuildContext context, WidgetRef ref) {
+    final profiles = ref.watch(profilesProvider);
+    final currentProfileId = ref.watch(currentProfileIdProvider);
+    final coreStatus = ref.watch(coreStatusProvider);
+
+    return GestureDetector(
+      onHorizontalDragEnd: (details) {
+        if ((details.primaryVelocity ?? 0) > 200) {
+          _openAddProfile(context);
+        }
+      },
+      child: CommonScaffold(
         title: appLocalizations.dashboard,
-        actions: _buildActions(isEdit),
-        floatingActionButton: const StartButton(),
-        body: Align(
-          alignment: Alignment.topCenter,
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(16).copyWith(bottom: 88),
-            child: isEdit
-                ? SystemBackBlock(
-                    child: CommonPopScope(
-                      child: SuperGrid(
-                        key: key,
-                        crossAxisCount: columns,
-                        crossAxisSpacing: spacing,
-                        mainAxisSpacing: spacing,
-                        children: [
-                          ...dashboardState.dashboardWidgets
-                              .where(
-                                (item) => item.platforms.contains(
-                                  SupportPlatform.currentPlatform,
-                                ),
-                              )
-                              .map((item) => item.widget),
-                        ],
-                        onUpdate: () {
-                          _handleSave();
-                        },
+        body: Column(
+          children: [
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+                children: [
+                  _InfoCard(child: const NetworkSpeed()),
+                  const SizedBox(height: 12),
+                  _InfoCard(child: const TrafficUsage()),
+                  const SizedBox(height: 16),
+                  ...profiles.map(
+                    (profile) => Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: _ProfileCard(
+                        profile: profile,
+                        isActive: profile.id == currentProfileId,
+                        coreStatus: coreStatus,
                       ),
-                      onPop: (context) {
-                        _handleUpdateIsEdit();
-                        return false;
-                      },
                     ),
-                  )
-                : Grid(
-                    crossAxisCount: columns,
-                    crossAxisSpacing: spacing,
-                    mainAxisSpacing: spacing,
-                    children: children,
                   ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _AddDashboardWidgetModal extends StatelessWidget {
-  final List<GridItem> items;
-  final Function(GridItem item) onAdd;
-
-  const _AddDashboardWidgetModal({required this.items, required this.onAdd});
-
-  @override
-  Widget build(BuildContext context) {
-    return DeferredPointerHandler(
-      child: SingleChildScrollView(
-        padding: EdgeInsets.all(16),
-        child: Grid(
-          crossAxisCount: 8,
-          crossAxisSpacing: 16,
-          mainAxisSpacing: 16,
-          children: items
-              .map(
-                (item) => item.wrap(
-                  builder: (child) {
-                    return _AddedContainer(
-                      onAdd: () {
-                        onAdd(item);
-                      },
-                      child: child,
-                    );
-                  },
-                ),
-              )
-              .toList(),
-        ),
-      ),
-    );
-  }
-}
-
-class _AddedContainer extends StatefulWidget {
-  final Widget child;
-  final VoidCallback onAdd;
-
-  const _AddedContainer({required this.child, required this.onAdd});
-
-  @override
-  State<_AddedContainer> createState() => _AddedContainerState();
-}
-
-class _AddedContainerState extends State<_AddedContainer> {
-  @override
-  void initState() {
-    super.initState();
-  }
-
-  @override
-  void didUpdateWidget(_AddedContainer oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.child != widget.child) {}
-  }
-
-  Future<void> _handleAdd() async {
-    widget.onAdd();
-  }
-
-  @override
-  void dispose() {
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        ActivateBox(child: widget.child),
-        Positioned(
-          top: -8,
-          right: -8,
-          child: DeferPointer(
-            child: SizedBox(
-              width: 24,
-              height: 24,
-              child: IconButton.filled(
-                iconSize: 20,
-                padding: EdgeInsets.all(2),
-                onPressed: _handleAdd,
-                icon: Icon(Icons.add),
+                ],
               ),
             ),
-          ),
+            Padding(
+              padding: EdgeInsets.fromLTRB(
+                16, 0, 16,
+                MediaQuery.of(context).padding.bottom + 16,
+              ),
+              child: SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () => _openAddProfile(context),
+                  icon: const Icon(Icons.add),
+                  label: const Text('Добавить подписку'),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    side: BorderSide(
+                      color: context.colorScheme.primary.withOpacity(0.4),
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
-      ],
+      ),
+    );
+  }
+}
+
+class _InfoCard extends StatelessWidget {
+  final Widget child;
+  const _InfoCard({required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: context.colorScheme.surfaceContainerHighest.withOpacity(0.5),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: child,
+    );
+  }
+}
+
+class _ProfileCard extends ConsumerStatefulWidget {
+  final Profile profile;
+  final bool isActive;
+  final CoreStatus coreStatus;
+
+  const _ProfileCard({
+    required this.profile,
+    required this.isActive,
+    required this.coreStatus,
+  });
+
+  @override
+  ConsumerState<_ProfileCard> createState() => _ProfileCardState();
+}
+
+class _ProfileCardState extends ConsumerState<_ProfileCard> {
+  bool _pinging = false;
+
+  Future<void> _handleConnect() async {
+    if (!widget.isActive) {
+      ref.read(currentProfileIdProvider.notifier).value = widget.profile.id;
+      appController.applyProfileDebounce();
+      await Future.delayed(const Duration(milliseconds: 400));
+    }
+    final isConnected = widget.coreStatus == CoreStatus.connected;
+    appController.updateStatus(!isConnected);
+  }
+
+  Future<void> _ping(Group group) async {
+    setState(() => _pinging = true);
+    try {
+      await delayTest(group.all, group.testUrl);
+      await appController.updateGroups();
+    } finally {
+      if (mounted) setState(() => _pinging = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final groups = widget.isActive ? ref.watch(groupsProvider) : <Group>[];
+    final isConnected = widget.isActive && widget.coreStatus == CoreStatus.connected;
+    final isConnecting = widget.isActive && widget.coreStatus == CoreStatus.connecting;
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: widget.isActive
+              ? context.colorScheme.primary
+              : context.colorScheme.outline.withOpacity(0.2),
+          width: widget.isActive ? 1.5 : 1,
+        ),
+        color: context.colorScheme.surface,
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    widget.profile.label,
+                    style: context.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                if (isConnected)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: Colors.green.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      appLocalizations.connected,
+                      style: context.textTheme.labelSmall?.copyWith(
+                        color: Colors.green,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            if (widget.isActive && groups.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              ...groups.take(1).map(
+                (group) => Row(
+                  children: [
+                    Expanded(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: context.colorScheme.surfaceContainerHighest.withOpacity(0.5),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: DropdownButton<String>(
+                          isExpanded: true,
+                          isDense: true,
+                          underline: const SizedBox(),
+                          value: group.all.any((p) => p.name == (group.now ?? ''))
+                              ? group.now
+                              : group.all.firstOrNull?.name,
+                          items: group.all.map((p) {
+                            final delay = ref.watch(
+                              delayDataSourceProvider.select(
+                                (m) => m[p.name]?.value,
+                              ),
+                            );
+                            return DropdownMenuItem(
+                              value: p.name,
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      p.name,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: context.textTheme.bodySmall,
+                                    ),
+                                  ),
+                                  if (delay != null && delay > 0)
+                                    Text(
+                                      'ms',
+                                      style: context.textTheme.labelSmall?.copyWith(
+                                        color: delay < 200
+                                            ? Colors.green
+                                            : delay < 500
+                                                ? Colors.orange
+                                                : Colors.red,
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            );
+                          }).toList(),
+                          onChanged: (value) {
+                            if (value != null) {
+                              appController.changeProxyDebounce(group.name, value);
+                            }
+                          },
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    SizedBox(
+                      width: 36,
+                      height: 36,
+                      child: _pinging
+                          ? const Padding(
+                              padding: EdgeInsets.all(8),
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : IconButton(
+                              padding: EdgeInsets.zero,
+                              tooltip: appLocalizations.delayTest,
+                              icon: const Icon(Icons.network_ping, size: 20),
+                              onPressed: () => _ping(group),
+                            ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: isConnecting ? null : _handleConnect,
+                style: FilledButton.styleFrom(
+                  backgroundColor: isConnected
+                      ? Colors.red.withOpacity(0.85)
+                      : context.colorScheme.primary,
+                  padding: const EdgeInsets.symmetric(vertical: 11),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                child: isConnecting
+                    ? const SizedBox(
+                        height: 18,
+                        width: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                    : Text(
+                        isConnected
+                            ? appLocalizations.stop
+                            : widget.isActive
+                                ? 'Подключить'
+                                : 'Выбрать и подключить',
+                      ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
