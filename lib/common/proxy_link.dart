@@ -196,10 +196,12 @@ _Proxy? _parseVless(Uri uri) {
   final sni = p['sni'] ?? p['host'] ?? host;
   final fp = p['fp'] ?? 'chrome';
 
+  final flow = p['flow'] ?? '';
   final extra = <String, dynamic>{
     'uuid': uuid,
     'udp': true,
     'network': network == 'xhttp' || network == 'splithttp' ? 'xhttp' : network,
+    if (flow.isNotEmpty) 'flow': flow,
   };
 
   if (security == 'reality') {
@@ -227,6 +229,22 @@ _Proxy? _parseVless(Uri uri) {
       'host': p['host'] ?? host,
     };
     if (p['mode'] != null) opts['mode'] = p['mode'];
+    if (p['extra'] != null) {
+      try {
+        final extraJson = jsonDecode(Uri.decodeComponent(p['extra']!)) as Map;
+        const keyMap = <String, String>{
+          'scMaxEachPostBytes': 'max-upload-size',
+          'scMaxConcurrentPosts': 'max-concurrent-uploads',
+          'scMinPostsIntervalMs': 'min-upload-interval',
+          'noGRPCHeader': 'no-grpc-header',
+          'xPaddingBytes': 'x-padding-bytes',
+        };
+        extraJson.forEach((k, v) {
+          final mapped = keyMap[k as String] ?? k as String;
+          opts[mapped] = v;
+        });
+      } catch (_) {}
+    }
     extra['xhttp-opts'] = opts;
   } else if (network == 'grpc') {
     extra['grpc-opts'] = {'grpc-service-name': p['serviceName'] ?? ''};
