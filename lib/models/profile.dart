@@ -211,6 +211,18 @@ extension ProfileExtension on Profile {
   }
 
   Future<Profile> update() async {
+    // Support direct proxy links (vless://, trojan://, ss://)
+    final proxyBytes = convertProxyLinkToClash(url);
+    if (proxyBytes != null) {
+      final name = Uri.tryParse(url)?.fragment;
+      return await copyWith(
+        label: label.takeFirstValid([
+          Uri.decodeComponent(name ?? ''),
+          id.toString(),
+        ]),
+      ).saveFile(proxyBytes);
+    }
+
     final response = await request.getFileResponseForUrl(url);
     final disposition = response.headers.value('content-disposition');
     final userinfo = response.headers.value('subscription-userinfo');

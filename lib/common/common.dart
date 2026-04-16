@@ -45,3 +45,4 @@ export 'tray.dart';
 export 'utils.dart';
 export 'window.dart';
 export 'yaml.dart';
+export 'proxy_link.dart';
