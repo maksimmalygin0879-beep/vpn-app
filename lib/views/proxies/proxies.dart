@@ -9,6 +9,7 @@ import 'package:honey_utility/widgets/widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../dashboard/widgets/start_button.dart';
 import 'setting.dart';
 import 'tab.dart';
 
@@ -83,13 +84,19 @@ class _ProxiesViewState extends ConsumerState<ProxiesView> {
   }
 
   Widget? _buildFAB() {
-    return _isTab
-        ? DelayTestButton(
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (_isTab)
+          DelayTestButton(
             onClick: () async {
               await _proxiesTabKey.currentState?.delayTestCurrentGroup();
             },
-          )
-        : null;
+          ),
+        if (_isTab) const SizedBox(height: 12),
+        const StartButton(),
+      ],
+    );
   }
 
   void _onSearch(String value) {
