@@ -8,7 +8,5 @@ executable_name: HoneyUtility.exe
 output_base_file_name: HoneyUtility.exe
 setup_icon_file: ..\windows\runner\resources\app_icon.ico
 locales:
-  - lang: zh
-    file: ..\windows\packaging\exe\ChineseSimplified.isl
-  - lang: en
+  - lang: ru
 privileges_required: admin
