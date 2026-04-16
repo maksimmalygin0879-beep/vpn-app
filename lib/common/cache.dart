@@ -1,7 +1,7 @@
 import 'dart:io';
 
 import 'package:dio/dio.dart';
-import 'package:fl_clash/common/common.dart';
+import 'package:honey_utility/common/common.dart';
 import 'package:flutter_cache_manager/flutter_cache_manager.dart';
 
 class LocalImageCacheManager extends CacheManager {

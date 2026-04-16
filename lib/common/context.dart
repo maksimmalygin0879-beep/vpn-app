@@ -1,7 +1,7 @@
-import 'package:fl_clash/l10n/l10n.dart';
-import 'package:fl_clash/manager/manager.dart';
-import 'package:fl_clash/models/state.dart';
-import 'package:fl_clash/widgets/scaffold.dart';
+import 'package:honey_utility/l10n/l10n.dart';
+import 'package:honey_utility/manager/manager.dart';
+import 'package:honey_utility/models/state.dart';
+import 'package:honey_utility/widgets/scaffold.dart';
 import 'package:flutter/material.dart';
 
 extension BuildContextExtension on BuildContext {

@@ -1,6 +1,6 @@
-import 'package:fl_clash/common/common.dart';
-import 'package:fl_clash/providers/config.dart';
-import 'package:fl_clash/widgets/widgets.dart';
+import 'package:honey_utility/common/common.dart';
+import 'package:honey_utility/providers/config.dart';
+import 'package:honey_utility/widgets/widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';

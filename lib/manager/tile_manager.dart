@@ -1,9 +1,9 @@
-import 'package:fl_clash/common/app_localizations.dart';
-import 'package:fl_clash/controller.dart';
-import 'package:fl_clash/core/controller.dart';
-import 'package:fl_clash/plugins/app.dart';
-import 'package:fl_clash/plugins/tile.dart';
-import 'package:fl_clash/providers/providers.dart';
+import 'package:honey_utility/common/app_localizations.dart';
+import 'package:honey_utility/controller.dart';
+import 'package:honey_utility/core/controller.dart';
+import 'package:honey_utility/plugins/app.dart';
+import 'package:honey_utility/plugins/tile.dart';
+import 'package:honey_utility/providers/providers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 

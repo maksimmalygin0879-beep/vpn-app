@@ -1,5 +1,5 @@
-name: fl_clash
-description: A multi-platform proxy client based on ClashMeta, simple and easy to use, open-source and ad-free.
+name: honey_utility
+description: Honey Utility — fast and simple internet tool
 publish_to: 'none'
 version: 0.8.92+2026020201
 environment:

@@ -1,10 +1,10 @@
-import 'package:fl_clash/common/common.dart';
-import 'package:fl_clash/core/core.dart';
-import 'package:fl_clash/enum/enum.dart';
-import 'package:fl_clash/models/models.dart';
-import 'package:fl_clash/plugins/app.dart';
-import 'package:fl_clash/plugins/service.dart';
-import 'package:fl_clash/providers/providers.dart';
+import 'package:honey_utility/common/common.dart';
+import 'package:honey_utility/core/core.dart';
+import 'package:honey_utility/enum/enum.dart';
+import 'package:honey_utility/models/models.dart';
+import 'package:honey_utility/plugins/app.dart';
+import 'package:honey_utility/plugins/service.dart';
+import 'package:honey_utility/providers/providers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 

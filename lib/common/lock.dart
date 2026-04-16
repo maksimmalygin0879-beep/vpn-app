@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import 'package:fl_clash/common/common.dart';
+import 'package:honey_utility/common/common.dart';
 
 class SingleInstanceLock {
   static SingleInstanceLock? _instance;

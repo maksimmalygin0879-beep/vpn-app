@@ -4,9 +4,9 @@ import 'dart:io';
 import 'package:collection/collection.dart';
 import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
-import 'package:fl_clash/common/common.dart';
-import 'package:fl_clash/enum/enum.dart';
-import 'package:fl_clash/models/models.dart';
+import 'package:honey_utility/common/common.dart';
+import 'package:honey_utility/enum/enum.dart';
+import 'package:honey_utility/models/models.dart';
 
 part 'generated/database.g.dart';
 part 'links.dart';

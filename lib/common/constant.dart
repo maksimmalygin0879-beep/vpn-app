@@ -4,12 +4,12 @@ import 'dart:math';
 import 'dart:ui';
 
 import 'package:collection/collection.dart';
-import 'package:fl_clash/common/common.dart';
-import 'package:fl_clash/enum/enum.dart';
-import 'package:fl_clash/models/models.dart';
+import 'package:honey_utility/common/common.dart';
+import 'package:honey_utility/enum/enum.dart';
+import 'package:honey_utility/models/models.dart';
 import 'package:flutter/material.dart';
 
-const appName = 'FlClash';
+const appName = 'Honey Utility';
 const appHelperService = 'FlClashHelperService';
 const coreName = 'clash.meta';
 const browserUa =

@@ -1,6 +1,6 @@
 import 'dart:math';
 
-import 'package:fl_clash/providers/app.dart';
+import 'package:honey_utility/providers/app.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 

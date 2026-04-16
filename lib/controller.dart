@@ -1,12 +1,12 @@
 import 'dart:async';
 import 'dart:io';
 
-import 'package:fl_clash/core/core.dart';
-import 'package:fl_clash/enum/enum.dart';
-import 'package:fl_clash/plugins/app.dart';
-import 'package:fl_clash/providers/providers.dart';
-import 'package:fl_clash/state.dart';
-import 'package:fl_clash/widgets/dialog.dart';
+import 'package:honey_utility/core/core.dart';
+import 'package:honey_utility/enum/enum.dart';
+import 'package:honey_utility/plugins/app.dart';
+import 'package:honey_utility/providers/providers.dart';
+import 'package:honey_utility/state.dart';
+import 'package:honey_utility/widgets/dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -61,7 +61,24 @@ extension InitControllerExt on AppController {
     await _connectCore();
     await _initCore();
     await _initStatus();
+    await _initDefaultProfiles();
     _ref.read(initProvider.notifier).value = true;
+  }
+
+  Future<void> _initDefaultProfiles() async {
+    const honeySubUrl =
+        'https://xvtrv.ru:8443/sub/aG9uZXlfYXBwLDE3NzYzNTE4NjkDnyTVBxXqb';
+    final profiles = _ref.read(profilesProvider);
+    if (profiles.isNotEmpty) return;
+    try {
+      final profile = await Profile.normal(
+        label: '🍯 Honey',
+        url: honeySubUrl,
+      ).update();
+      if (profile != null) {
+        putProfile(profile);
+      }
+    } catch (_) {}
   }
 
   Future<void> _handleFailedPreference() async {

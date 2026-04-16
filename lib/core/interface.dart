@@ -1,9 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:fl_clash/common/common.dart';
-import 'package:fl_clash/enum/enum.dart';
-import 'package:fl_clash/models/models.dart';
+import 'package:honey_utility/common/common.dart';
+import 'package:honey_utility/enum/enum.dart';
+import 'package:honey_utility/models/models.dart';
 import 'package:flutter/foundation.dart';
 
 mixin CoreInterface {

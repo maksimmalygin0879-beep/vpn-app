@@ -1,7 +1,7 @@
 import 'package:collection/collection.dart';
-import 'package:fl_clash/common/common.dart';
-import 'package:fl_clash/database/database.dart';
-import 'package:fl_clash/models/models.dart';
+import 'package:honey_utility/common/common.dart';
+import 'package:honey_utility/database/database.dart';
+import 'package:honey_utility/models/models.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 part 'generated/database.g.dart';
