@@ -532,5 +532,5 @@ Future<void> main(Iterable<String> args) async {
   runner.addCommand(BuildCommand(target: Target.linux));
   runner.addCommand(BuildCommand(target: Target.windows));
   runner.addCommand(BuildCommand(target: Target.macos));
-  runner.run(args);
+  await runner.run(args);
 }
