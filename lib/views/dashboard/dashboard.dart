@@ -305,28 +305,22 @@ class _ProfilePageState extends ConsumerState<_ProfilePage> {
   }
 
   Future<void> _selectProxy(String proxyName) async {
-    // Get the main group name from active groups or default
-    String? groupName;
-    if (widget.isActive) {
-      final groups = ref.read(groupsProvider);
-      groupName = groups.isEmpty ? null : groups.first.name;
-    }
-
+    // Activate profile if not current
     if (!widget.isActive) {
       ref.read(currentProfileIdProvider.notifier).value = widget.profile.id;
       appController.applyProfileDebounce();
       await Future.delayed(const Duration(milliseconds: 800));
-      // re-read group name after activation
-      final groups = ref.read(groupsProvider);
-      groupName = groups.isEmpty ? null : groups.first.name;
     }
 
+    // Change proxy in running core
+    final groups = ref.read(groupsProvider);
+    final groupName = groups.isEmpty ? null : groups.first.name;
     if (groupName != null) {
       appController.changeProxyDebounce(groupName, proxyName);
     }
-    if (widget.coreStatus != CoreStatus.connected) {
-      appController.updateStatus(true);
-    }
+
+    // Always start VPN
+    appController.updateStatus(true);
   }
 
   Future<void> _ping() async {
