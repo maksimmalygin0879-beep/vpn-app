@@ -9,7 +9,7 @@ import 'package:honey_utility/enum/enum.dart';
 import 'package:honey_utility/models/models.dart';
 import 'package:flutter/material.dart';
 
-const appName = 'Honey Utility';
+const appName = "Honey's";
 const appHelperService = 'FlClashHelperService';
 const coreName = 'clash.meta';
 const browserUa =
