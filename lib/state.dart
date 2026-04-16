@@ -56,7 +56,7 @@ class GlobalState {
 
   Future<ProviderContainer> init(int version) async {
     coreSHA256 = const String.fromEnvironment('CORE_SHA256');
-    isPre = const String.fromEnvironment('APP_ENV') != 'stable';
+    isPre = false;
     await _initDynamicColor();
     return await _initData(version);
   }
