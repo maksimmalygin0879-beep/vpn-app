@@ -67,7 +67,7 @@ extension InitControllerExt on AppController {
 
   Future<void> _initDefaultProfiles() async {
     const honeySubUrl =
-        'https://xvtrv.ru:8443/sub/aG9uZXlfYXBwLDE3NzYzNTE4NjkDnyTVBxXqb';
+        'https://xvtrv.ru/honey/clash-sub/honey';
     // Read directly from DB to avoid race with stream init
     final existing = await database.profilesDao.all().get();
     if (existing.isNotEmpty) return;
