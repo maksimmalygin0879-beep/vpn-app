@@ -35,8 +35,11 @@ jobs:
           flutter-version: 3.35.7
           cache: true
 
+      - name: Get dependencies
+        run: flutter pub get
+
       - name: Build
-        run: dart setup.dart windows --arch amd64
+        run: dart run setup.dart windows --arch amd64
 
       - name: Upload
         uses: actions/upload-artifact@v4
