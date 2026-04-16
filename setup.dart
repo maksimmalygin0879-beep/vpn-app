@@ -470,7 +470,7 @@ class BuildCommand extends Command {
 
     switch (target) {
       case Target.windows:
-        _buildDistributor(
+        await _buildDistributor(
           target: target,
           targets: 'exe,zip',
           args: ' --description $archName',
