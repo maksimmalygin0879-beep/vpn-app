@@ -35,22 +35,19 @@ class AddProfileView extends StatelessWidget {
     final url = await globalState.showCommonDialog<String>(
       child: InputDialog(
         autovalidateMode: AutovalidateMode.onUnfocus,
-        title: appLocalizations.importFromURL,
-        labelText: appLocalizations.url,
+        title: 'Добавить подписку',
+        labelText: 'URL / vless:// / hy2:// / base64',
         value: '',
         validator: (value) {
-          if (value == null || value.isEmpty) {
-            return appLocalizations.emptyTip('').trim();
-          }
-          if (!value.isUrl) {
-            return appLocalizations.urlTip('').trim();
+          if (value == null || value.trim().isEmpty) {
+            return 'Введите ссылку или текст подписки';
           }
           return null;
         },
       ),
     );
     if (url != null) {
-      _handleAddProfileFormURL(url);
+      _handleAddProfileFormURL(url.trim());
     }
   }
 

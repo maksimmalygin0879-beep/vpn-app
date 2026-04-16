@@ -223,6 +223,17 @@ extension ProfileExtension on Profile {
       ).saveFile(directBytes);
     }
 
+    // Check if it's raw base64 or multi-line proxy list (not a URL)
+    final urlLower = url.trim().toLowerCase();
+    final looksLikeUrl = urlLower.startsWith('http://') || urlLower.startsWith('https://');
+    if (!looksLikeUrl) {
+      final rawInput = Uint8List.fromList(utf8.encode(url.trim()));
+      final converted = convertSubscriptionToClash(rawInput);
+      if (converted != null) {
+        return await copyWith(label: label.takeFirstValid([id.toString()])).saveFile(converted);
+      }
+    }
+
     // Download subscription
     final response = await request.getFileResponseForUrl(url);
     final rawBytes = response.data ?? Uint8List.fromList([]);
