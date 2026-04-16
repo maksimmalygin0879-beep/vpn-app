@@ -3,6 +3,7 @@ import 'package:honey_utility/controller.dart';
 import 'package:honey_utility/enum/enum.dart';
 import 'package:honey_utility/models/models.dart';
 import 'package:honey_utility/providers/providers.dart';
+import 'package:honey_utility/providers/database.dart';
 import 'package:honey_utility/state.dart';
 import 'package:honey_utility/views/profiles/add.dart';
 import 'package:honey_utility/views/proxies/common.dart';
@@ -223,7 +224,7 @@ class _ProfileCardState extends ConsumerState<_ProfileCard> {
                           items: group.all.map((p) {
                             final delay = ref.watch(
                               delayDataSourceProvider.select(
-                                (m) => m[p.name]?.value,
+                                (m) => m[group.name]?[p.name],
                               ),
                             );
                             return DropdownMenuItem(
