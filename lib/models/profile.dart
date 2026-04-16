@@ -211,19 +211,26 @@ extension ProfileExtension on Profile {
   }
 
   Future<Profile> update() async {
-    // Support direct proxy links (vless://, trojan://, ss://)
-    final proxyBytes = convertProxyLinkToClash(url);
-    if (proxyBytes != null) {
-      final name = Uri.tryParse(url)?.fragment;
+    // Support direct proxy links (vless://, vmess://, trojan://, ss://, hysteria2://)
+    final directBytes = convertProxyLinkToClash(url);
+    if (directBytes != null) {
+      final fragment = Uri.tryParse(url)?.fragment ?? '';
       return await copyWith(
         label: label.takeFirstValid([
-          Uri.decodeComponent(name ?? ''),
+          Uri.decodeComponent(fragment),
           id.toString(),
         ]),
-      ).saveFile(proxyBytes);
+      ).saveFile(directBytes);
     }
 
+    // Download subscription
     final response = await request.getFileResponseForUrl(url);
+    final rawBytes = response.data ?? Uint8List.fromList([]);
+
+    // Auto-detect and convert: Clash YAML, base64 V2Ray, single proxy links
+    final converted = convertSubscriptionToClash(rawBytes);
+    final bytes = converted ?? rawBytes;
+
     final disposition = response.headers.value('content-disposition');
     final userinfo = response.headers.value('subscription-userinfo');
     return await copyWith(
@@ -232,7 +239,7 @@ extension ProfileExtension on Profile {
         id.toString(),
       ]),
       subscriptionInfo: SubscriptionInfo.formHString(userinfo),
-    ).saveFile(response.data ?? Uint8List.fromList([]));
+    ).saveFile(bytes);
   }
 
   Future<Profile> saveFile(Uint8List bytes) async {
