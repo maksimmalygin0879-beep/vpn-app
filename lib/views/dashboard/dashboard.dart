@@ -78,7 +78,7 @@ class _DashboardViewState extends ConsumerState<DashboardView> {
         // customize button
         IconButton(
           icon: const Icon(Icons.tune, size: 22),
-          onPressed: () => appController.toPage(PageType.dashboard),
+          onPressed: () => appController.toPage(PageLabel.proxies),
         ),
       ],
       body: Column(
@@ -96,11 +96,9 @@ class _DashboardViewState extends ConsumerState<DashboardView> {
           ),
           const SizedBox(height: 16),
           // page indicator
-          ValueListenableBuilder<double?>(
-            valueListenable: _pageController.hasClients
-                ? _pageController.position.notifier
-                : ValueNotifier(null),
-            builder: (_, __, ___) {
+          ListenableBuilder(
+            listenable: _pageController,
+            builder: (_, __) {
               final page = _pageController.hasClients
                   ? (_pageController.page ?? 0).round()
                   : 0;
@@ -383,9 +381,8 @@ class _ProfilePageState extends ConsumerState<_ProfilePage> {
                     separatorBuilder: (_, __) => const Divider(height: 1),
                     itemBuilder: (context, i) {
                       final proxy = proxies[i];
-                      final delay = mainGroup != null
-                          ? delayMap[mainGroup.name]?[proxy.name]
-                          : null;
+                      final groupDelays = mainGroup != null ? delayMap[mainGroup.name] : null;
+                      final delay = groupDelays?[proxy.name];
                       final isSelected = proxy.name == selectedProxy && widget.isActive;
 
                       return InkWell(
