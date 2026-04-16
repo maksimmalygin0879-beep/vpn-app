@@ -2,51 +2,50 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 /// Universal subscription converter.
-/// Accepts:
-/// - Clash/Mihomo YAML (returned as-is)
-/// - Base64 V2Ray subscription (list of proxy links)
-/// - Single proxy link (vless://, trojan://, ss://, hysteria2://)
-/// Returns null if content is already valid Clash YAML (no conversion needed).
-/// Returns converted Uint8List if conversion was applied.
+/// Accepts Clash YAML, base64 V2Ray, single proxy links.
+/// Returns null if content is already valid Clash YAML.
 Uint8List? convertSubscriptionToClash(Uint8List bytes) {
   final text = utf8.decode(bytes, allowMalformed: true).trim();
 
-  // 1. Already looks like Clash YAML
   if (_isClashYaml(text)) return null;
 
-  // 2. Direct single proxy link
   final singleBytes = convertProxyLinkToClash(text);
   if (singleBytes != null) return singleBytes;
 
-  // 3. Base64 V2Ray subscription
   final decoded = _tryBase64Decode(text);
   if (decoded != null) {
-    final links = decoded.split(RegExp(r'[\r\n]+')).where((l) => l.trim().isNotEmpty).toList();
-    if (links.isNotEmpty && _isProxyLink(links.first)) {
-      return _multiLinksToClash(links);
-    }
+    final links = decoded
+        .split(RegExp(r'[\r\n]+'))
+        .map((l) => l.trim())
+        .where((l) => l.isNotEmpty && _isProxyLink(l))
+        .toList();
+    if (links.isNotEmpty) return _multiLinksToClash(links);
   }
 
   return null;
 }
 
-bool _isClashYaml(String text) {
-  return (text.contains('proxies:') || text.contains('proxy-groups:')) &&
-      (text.startsWith('proxies:') ||
-          text.startsWith('mixed-port:') ||
-          text.startsWith('port:') ||
-          text.startsWith('mode:') ||
-          text.startsWith('dns:'));
-}
+bool _isClashYaml(String text) =>
+    (text.contains('proxies:') || text.contains('proxy-groups:')) &&
+    (text.startsWith('proxies:') ||
+        text.startsWith('mixed-port:') ||
+        text.startsWith('port:') ||
+        text.startsWith('mode:') ||
+        text.startsWith('dns:'));
 
-bool _isProxyLink(String s) {
-  final schemes = ['vless://', 'vmess://', 'trojan://', 'ss://', 'hysteria2://', 'hy2://'];
-  return schemes.any((sc) => s.startsWith(sc));
-}
+bool _isProxyLink(String s) => const [
+      'vless://',
+      'vmess://',
+      'trojan://',
+      'ss://',
+      'hysteria2://',
+      'hy2://',
+    ].any(s.startsWith);
 
 String? _tryBase64Decode(String text) {
   try {
-    final normalized = base64.normalize(text.replaceAll(RegExp(r'\s'), ''));
+    final clean = text.replaceAll(RegExp(r'\s'), '');
+    final normalized = base64.normalize(clean);
     return utf8.decode(base64.decode(normalized));
   } catch (_) {
     return null;
@@ -54,12 +53,7 @@ String? _tryBase64Decode(String text) {
 }
 
 Uint8List _multiLinksToClash(List<String> links) {
-  final proxies = <Map<String, dynamic>>[];
-
-  for (final link in links) {
-    final proxy = _parseLinkToMap(link.trim());
-    if (proxy != null) proxies.add(proxy);
-  }
+  final proxies = links.map(_parseLinkToProxy).whereType<_Proxy>().toList();
 
   if (proxies.isEmpty) {
     return Uint8List.fromList(utf8.encode('proxies: []\nrules:\n- MATCH,DIRECT\n'));
@@ -68,262 +62,271 @@ Uint8List _multiLinksToClash(List<String> links) {
   final sb = StringBuffer();
   sb.writeln('proxies:');
   for (final p in proxies) {
-    sb.write(_mapToYaml(p));
+    sb.write(p.toYamlListItem());
   }
-
   sb.writeln('proxy-groups:');
   sb.writeln('- name: PROXY');
   sb.writeln('  type: select');
   sb.writeln('  proxies:');
   for (final p in proxies) {
-    sb.writeln('  - "${_escape(p['name'] as String)}"');
+    sb.writeln('  - "${_esc(p.name)}"');
   }
-
   sb.writeln('rules:');
   sb.writeln('- MATCH,PROXY');
-
   return Uint8List.fromList(utf8.encode(sb.toString()));
 }
 
-Map<String, dynamic>? _parseLinkToMap(String link) {
-  final uri = Uri.tryParse(link);
-  if (uri == null) return null;
+/// Converts a single proxy link (vless://, etc.) to a minimal Clash YAML config.
+Uint8List? convertProxyLinkToClash(String url) {
+  if (!_isProxyLink(url)) return null;
+  final proxy = _parseLinkToProxy(url);
+  if (proxy == null) return null;
+  final sb = StringBuffer();
+  sb.writeln('proxies:');
+  sb.write(proxy.toYamlListItem());
+  sb.writeln('proxy-groups:');
+  sb.writeln('- name: PROXY');
+  sb.writeln('  type: select');
+  sb.writeln('  proxies:');
+  sb.writeln('  - "${_esc(proxy.name)}"');
+  sb.writeln('rules:');
+  sb.writeln('- MATCH,PROXY');
+  return Uint8List.fromList(utf8.encode(sb.toString()));
+}
 
-  switch (uri.scheme.toLowerCase()) {
-    case 'vless':
-      return _parseVless(uri);
-    case 'trojan':
-      return _parseTrojan(uri);
-    case 'ss':
-      return _parseSs(uri);
-    case 'vmess':
-      return _parseVmess(uri);
-    case 'hysteria2':
-    case 'hy2':
-      return _parseHysteria2(uri);
-    default:
-      return null;
+// ---------------------------------------------------------------------------
+// Proxy data class
+// ---------------------------------------------------------------------------
+
+class _Proxy {
+  final String type;
+  final String name;
+  final String server;
+  final int port;
+  final Map<String, dynamic> extra; // additional fields
+
+  _Proxy({
+    required this.type,
+    required this.name,
+    required this.server,
+    required this.port,
+    this.extra = const {},
+  });
+
+  String toYamlListItem() {
+    final sb = StringBuffer();
+    // Build all top-level scalar fields first, then nested objects
+    final fields = <String, dynamic>{
+      'type': type,
+      'name': name,
+      'server': server,
+      'port': port,
+      ...extra,
+    };
+
+    bool first = true;
+    final nestedKeys = <String>[];
+    // Write scalars first
+    fields.forEach((k, v) {
+      if (v is Map) {
+        nestedKeys.add(k);
+        return;
+      }
+      final line = '$k: ${_yamlVal(v)}\n';
+      if (first) {
+        sb.write('- $line');
+        first = false;
+      } else {
+        sb.write('  $line');
+      }
+    });
+    // Write nested maps
+    for (final k in nestedKeys) {
+      final v = fields[k] as Map;
+      sb.write('  $k:\n');
+      v.forEach((k2, v2) {
+        if (v2 is Map) {
+          sb.write('    $k2:\n');
+          v2.forEach((k3, v3) => sb.write('      $k3: ${_yamlVal(v3)}\n'));
+        } else {
+          sb.write('    $k2: ${_yamlVal(v2)}\n');
+        }
+      });
+    }
+    return sb.toString();
   }
 }
 
-Map<String, dynamic>? _parseVless(Uri uri) {
+String _yamlVal(dynamic v) {
+  if (v is String) return '"${_esc(v)}"';
+  if (v is bool) return v ? 'true' : 'false';
+  return v.toString();
+}
+
+String _esc(String s) => s.replaceAll('\\', '\\\\').replaceAll('"', '\\"');
+
+// ---------------------------------------------------------------------------
+// Parsers
+// ---------------------------------------------------------------------------
+
+_Proxy? _parseLinkToProxy(String link) {
+  final uri = Uri.tryParse(link);
+  if (uri == null) return null;
+  switch (uri.scheme.toLowerCase()) {
+    case 'vless':      return _parseVless(uri);
+    case 'trojan':     return _parseTrojan(uri);
+    case 'ss':         return _parseSs(uri);
+    case 'vmess':      return _parseVmess(uri);
+    case 'hysteria2':
+    case 'hy2':        return _parseHysteria2(uri);
+    default:           return null;
+  }
+}
+
+_Proxy? _parseVless(Uri uri) {
   final uuid = uri.userInfo;
   final host = uri.host;
   final port = uri.port;
   final p = uri.queryParameters;
-  final name = Uri.decodeComponent(uri.fragment.isNotEmpty ? uri.fragment : host);
-  final network = p['type'] ?? 'tcp';
-  final security = p['security'] ?? '';
-
   if (uuid.isEmpty || host.isEmpty) return null;
 
-  final proxy = <String, dynamic>{
-    'type': 'vless',
-    'name': name,
-    'server': host,
-    'port': port,
+  final name = _decodeFrag(uri);
+  final network = p['type'] ?? 'tcp';
+  final security = p['security'] ?? '';
+  final sni = p['sni'] ?? p['host'] ?? host;
+  final fp = p['fp'] ?? 'chrome';
+
+  final extra = <String, dynamic>{
     'uuid': uuid,
     'udp': true,
-    'network': network == 'xhttp' ? 'xhttp' : network == 'ws' ? 'ws' : network == 'grpc' ? 'grpc' : 'tcp',
+    'network': network == 'xhttp' || network == 'splithttp' ? 'xhttp' : network,
   };
 
-  final sni = p['sni'] ?? p['host'] ?? host;
   if (security == 'reality') {
-    proxy['tls'] = true;
-    proxy['servername'] = sni;
-    proxy['client-fingerprint'] = p['fp'] ?? 'chrome';
-    proxy['reality-opts'] = {
+    extra['tls'] = true;
+    extra['servername'] = sni;
+    extra['client-fingerprint'] = fp;
+    extra['reality-opts'] = {
       'public-key': p['pbk'] ?? '',
       'short-id': p['sid'] ?? '',
     };
   } else if (security == 'tls') {
-    proxy['tls'] = true;
-    proxy['servername'] = sni;
+    extra['tls'] = true;
+    extra['servername'] = sni;
+    extra['client-fingerprint'] = fp;
   }
 
   if (network == 'ws') {
-    proxy['ws-opts'] = {
+    extra['ws-opts'] = {
       'path': p['path'] ?? '/',
       'headers': {'Host': p['host'] ?? host},
     };
   } else if (network == 'xhttp' || network == 'splithttp') {
-    proxy['network'] = 'xhttp';
-    proxy['xhttp-opts'] = {
+    final opts = <String, dynamic>{
       'path': p['path'] ?? '/',
       'host': p['host'] ?? host,
-      if (p['mode'] != null) 'mode': p['mode'],
     };
+    if (p['mode'] != null) opts['mode'] = p['mode'];
+    extra['xhttp-opts'] = opts;
   } else if (network == 'grpc') {
-    proxy['grpc-opts'] = {'grpc-service-name': p['serviceName'] ?? ''};
+    extra['grpc-opts'] = {'grpc-service-name': p['serviceName'] ?? ''};
   }
 
-  return proxy;
+  return _Proxy(type: 'vless', name: name, server: host, port: port, extra: extra);
 }
 
-Map<String, dynamic>? _parseTrojan(Uri uri) {
+_Proxy? _parseTrojan(Uri uri) {
   final host = uri.host;
-  final port = uri.port;
+  if (host.isEmpty) return null;
   final p = uri.queryParameters;
-  final name = Uri.decodeComponent(uri.fragment.isNotEmpty ? uri.fragment : host);
-  if (host.isEmpty) return null;
-  return {
-    'type': 'trojan',
-    'name': name,
-    'server': host,
-    'port': port,
-    'password': uri.userInfo,
-    'sni': p['sni'] ?? p['peer'] ?? host,
-    'udp': true,
-  };
+  return _Proxy(
+    type: 'trojan',
+    name: _decodeFrag(uri),
+    server: host,
+    port: uri.port,
+    extra: {
+      'password': uri.userInfo,
+      'sni': p['sni'] ?? p['peer'] ?? host,
+      'udp': true,
+    },
+  );
 }
 
-Map<String, dynamic>? _parseSs(Uri uri) {
+_Proxy? _parseSs(Uri uri) {
   final host = uri.host;
-  final port = uri.port;
-  final name = Uri.decodeComponent(uri.fragment.isNotEmpty ? uri.fragment : host);
   if (host.isEmpty) return null;
-
   String method = '', password = '';
   try {
     final decoded = utf8.decode(base64.decode(base64.normalize(uri.userInfo)));
     final idx = decoded.indexOf(':');
-    if (idx != -1) {
-      method = decoded.substring(0, idx);
-      password = decoded.substring(idx + 1);
-    }
+    if (idx != -1) { method = decoded.substring(0, idx); password = decoded.substring(idx + 1); }
   } catch (_) {
     final parts = uri.userInfo.split(':');
-    if (parts.length >= 2) {
-      method = parts[0];
-      password = parts.sublist(1).join(':');
-    }
+    if (parts.length >= 2) { method = parts[0]; password = parts.sublist(1).join(':'); }
   }
-
   if (method.isEmpty) return null;
-  return {
-    'type': 'ss',
-    'name': name,
-    'server': host,
-    'port': port,
-    'cipher': method,
-    'password': password,
-    'udp': true,
-  };
+  return _Proxy(
+    type: 'ss',
+    name: _decodeFrag(uri),
+    server: host,
+    port: uri.port,
+    extra: {'cipher': method, 'password': password, 'udp': true},
+  );
 }
 
-Map<String, dynamic>? _parseVmess(Uri uri) {
+_Proxy? _parseVmess(Uri uri) {
   try {
-    final json = jsonDecode(utf8.decode(base64.decode(base64.normalize(uri.path))));
-    final name = json['ps'] as String? ?? json['add'] as String? ?? 'vmess';
+    final raw = uri.toString().replaceFirst('vmess://', '');
+    final json = jsonDecode(utf8.decode(base64.decode(base64.normalize(raw))));
     final host = json['add'] as String? ?? '';
-    final port = int.tryParse(json['port'].toString()) ?? 443;
     if (host.isEmpty) return null;
     final net = json['net'] as String? ?? 'tcp';
-    final proxy = <String, dynamic>{
-      'type': 'vmess',
-      'name': name,
-      'server': host,
-      'port': port,
+    final extra = <String, dynamic>{
       'uuid': json['id'] as String? ?? '',
       'alterId': int.tryParse(json['aid'].toString()) ?? 0,
       'cipher': 'auto',
       'udp': true,
       'network': net,
     };
-    final tls = json['tls'] as String? ?? '';
-    if (tls == 'tls') {
-      proxy['tls'] = true;
-      proxy['servername'] = json['sni'] as String? ?? json['host'] as String? ?? host;
+    if ((json['tls'] as String? ?? '') == 'tls') {
+      extra['tls'] = true;
+      extra['servername'] = json['sni'] as String? ?? json['host'] as String? ?? host;
     }
     if (net == 'ws') {
-      proxy['ws-opts'] = {
+      extra['ws-opts'] = {
         'path': json['path'] as String? ?? '/',
         'headers': {'Host': json['host'] as String? ?? host},
       };
     }
-    return proxy;
-  } catch (_) {
-    return null;
-  }
+    return _Proxy(
+      type: 'vmess',
+      name: json['ps'] as String? ?? host,
+      server: host,
+      port: int.tryParse(json['port'].toString()) ?? 443,
+      extra: extra,
+    );
+  } catch (_) { return null; }
 }
 
-Map<String, dynamic>? _parseHysteria2(Uri uri) {
+_Proxy? _parseHysteria2(Uri uri) {
   final host = uri.host;
-  final port = uri.port;
-  final p = uri.queryParameters;
-  final name = Uri.decodeComponent(uri.fragment.isNotEmpty ? uri.fragment : host);
   if (host.isEmpty) return null;
-  final proxy = <String, dynamic>{
-    'type': 'hysteria2',
-    'name': name,
-    'server': host,
-    'port': port,
+  final p = uri.queryParameters;
+  final extra = <String, dynamic>{
     'password': uri.userInfo,
+    'sni': p['sni'] ?? host,
     'udp': true,
   };
-  final sni = p['sni'] ?? host;
-  proxy['sni'] = sni;
-  if (p['insecure'] == '1') proxy['skip-cert-verify'] = true;
-  final obfs = p['obfs'];
-  if (obfs != null) {
-    proxy['obfs'] = obfs;
-    proxy['obfs-password'] = p['obfs-password'] ?? '';
+  if (p['insecure'] == '1') extra['skip-cert-verify'] = true;
+  if (p['obfs'] != null) {
+    extra['obfs'] = p['obfs'];
+    extra['obfs-password'] = p['obfs-password'] ?? '';
   }
-  return proxy;
+  return _Proxy(type: 'hysteria2', name: _decodeFrag(uri), server: host, port: uri.port, extra: extra);
 }
 
-String _mapToYaml(Map<String, dynamic> map, {int indent = 0}) {
-  final sb = StringBuffer();
-  final prefix = ' ' * indent;
-  map.forEach((k, v) {
-    if (v is Map) {
-      sb.writeln('$prefix$k:');
-      v.forEach((k2, v2) {
-        if (v2 is Map) {
-          sb.writeln('$prefix  $k2:');
-          v2.forEach((k3, v3) {
-            sb.writeln('$prefix    $k3: ${_yamlValue(v3)}');
-          });
-        } else {
-          sb.writeln('$prefix  $k2: ${_yamlValue(v2)}');
-        }
-      });
-    } else {
-      sb.writeln('$prefix$k: ${_yamlValue(v)}');
-    }
-  });
-  return sb.toString();
+String _decodeFrag(Uri uri) {
+  final f = uri.fragment;
+  if (f.isEmpty) return uri.host;
+  try { return Uri.decodeComponent(f); } catch (_) { return f; }
 }
-
-String _yamlValue(dynamic v) {
-  if (v is String) return '"${_escape(v)}"';
-  if (v is bool) return v ? 'true' : 'false';
-  return v.toString();
-}
-
-/// Converts a single proxy link to Clash YAML bytes.
-/// Returns null if not a recognized proxy link.
-Uint8List? convertProxyLinkToClash(String url) {
-  if (!_isProxyLink(url)) return null;
-  final uri = Uri.tryParse(url);
-  if (uri == null) return null;
-
-  final proxy = _parseLinkToMap(url);
-  if (proxy == null) return null;
-
-  final name = proxy['name'] as String;
-  final sb = StringBuffer();
-  sb.writeln('proxies:');
-  sb.write('- ');
-  sb.write(_mapToYaml(proxy));
-  sb.writeln('proxy-groups:');
-  sb.writeln('- name: PROXY');
-  sb.writeln('  type: select');
-  sb.writeln('  proxies:');
-  sb.writeln('  - "${_escape(name)}"');
-  sb.writeln('rules:');
-  sb.writeln('- MATCH,PROXY');
-  return Uint8List.fromList(utf8.encode(sb.toString()));
-}
-
-String _escape(String s) => s.replaceAll('\\', '\\\\').replaceAll('"', '\\"');
