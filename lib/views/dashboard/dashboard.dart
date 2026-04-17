@@ -6,19 +6,23 @@ import 'package:honey_utility/enum/enum.dart';
 import 'package:honey_utility/models/models.dart';
 import 'package:honey_utility/providers/providers.dart';
 import 'package:honey_utility/providers/database.dart';
+import 'package:honey_utility/providers/config.dart';
 import 'package:honey_utility/state.dart';
 import 'package:honey_utility/views/profiles/add.dart';
 import 'package:honey_utility/views/proxies/common.dart';
 import 'package:honey_utility/widgets/widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 import 'package:yaml/yaml.dart';
 
 import 'widgets/network_speed.dart';
-import 'widgets/outbound_mode.dart';
+import 'widgets/start_button.dart';
 import 'widgets/traffic_usage.dart';
 
+// Filter special proxy names and group types
 const _kSpecialProxies = {'DIRECT', 'REJECT', 'GLOBAL'};
+const _kGroupTypes = {'Selector', 'URLTest', 'Fallback', 'LoadBalance', 'Relay', 'Compatible'};
 
 class DashboardView extends ConsumerStatefulWidget {
   const DashboardView({super.key});
@@ -70,6 +74,7 @@ class _DashboardViewState extends ConsumerState<DashboardView> {
 
     return CommonScaffold(
       title: appLocalizations.dashboard,
+      floatingActionButton: const StartButton(),
       actions: [
         IconButton(
           icon: const Icon(Icons.add_circle_outline, size: 22),
@@ -89,7 +94,7 @@ class _DashboardViewState extends ConsumerState<DashboardView> {
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Expanded(child: _StatCard(child: const OutboundModeV2())),
+                      Expanded(child: _StatCard(child: const _ModeSelector())),
                       const SizedBox(width: 10),
                       Expanded(child: _StatCard(child: const TrafficUsage())),
                     ],
@@ -136,6 +141,65 @@ class _DashboardViewState extends ConsumerState<DashboardView> {
           ),
         ],
       ),
+    );
+  }
+}
+
+// Compact mode selector widget
+class _ModeSelector extends ConsumerWidget {
+  const _ModeSelector();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final mode = ref.watch(
+      patchClashConfigProvider.select((s) => s.mode),
+    );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          appLocalizations.outboundMode,
+          style: context.textTheme.labelSmall?.copyWith(
+            color: context.colorScheme.onSurface.withOpacity(0.5),
+          ),
+        ),
+        const SizedBox(height: 6),
+        Row(
+          children: Mode.values.map((m) {
+            final active = m == mode;
+            return Expanded(
+              child: GestureDetector(
+                onTap: () => appController.changeMode(m),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 150),
+                  margin: EdgeInsets.only(
+                    right: m != Mode.values.last ? 4 : 0,
+                  ),
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(8),
+                    color: active
+                        ? context.colorScheme.primary
+                        : context.colorScheme.surfaceContainerHighest,
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(
+                    Intl.message(m.name),
+                    style: context.textTheme.labelSmall?.copyWith(
+                      color: active
+                          ? context.colorScheme.onPrimary
+                          : context.colorScheme.onSurface.withOpacity(0.7),
+                      fontWeight: active ? FontWeight.w600 : FontWeight.normal,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ],
     );
   }
 }
@@ -305,21 +369,16 @@ class _ProfilePageState extends ConsumerState<_ProfilePage> {
   }
 
   Future<void> _selectProxy(String proxyName) async {
-    // Activate profile if not current
     if (!widget.isActive) {
       ref.read(currentProfileIdProvider.notifier).value = widget.profile.id;
       appController.applyProfileDebounce();
       await Future.delayed(const Duration(milliseconds: 800));
     }
-
-    // Change proxy in running core
     final groups = ref.read(groupsProvider);
     final groupName = groups.isEmpty ? null : groups.first.name;
     if (groupName != null) {
       appController.changeProxyDebounce(groupName, proxyName);
     }
-
-    // Always start VPN
     appController.updateStatus(true);
   }
 
@@ -340,28 +399,28 @@ class _ProfilePageState extends ConsumerState<_ProfilePage> {
   @override
   Widget build(BuildContext context) {
     final groups = widget.isActive ? ref.watch(groupsProvider) : <Group>[];
-    final delayMap = widget.isActive
-        ? ref.watch(delayDataSourceProvider)
-        : <String, Map<String, int?>>{};
     final isConnected =
         widget.isActive && widget.coreStatus == CoreStatus.connected;
 
     final mainGroup = groups.isEmpty ? null : groups.first;
     final selectedProxy = mainGroup?.now ?? '';
 
-    // Use live proxy list when active, fallback to parsed YAML
+    // Live proxies: filter out group-type entries and special names
     final liveProxies = mainGroup?.all
-            .where((p) => !_kSpecialProxies.contains(p.name))
+            .where((p) =>
+                !_kSpecialProxies.contains(p.name) &&
+                !_kGroupTypes.contains(p.type))
             .map((p) => p.name)
             .toList() ??
         [];
     final displayNames = liveProxies.isNotEmpty ? liveProxies : _proxyNames;
+    final testUrl = mainGroup?.testUrl;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
       child: Column(
         children: [
-          // header row with arrows and title
+          // header
           Row(
             children: [
               if (widget.onPrev != null)
@@ -404,7 +463,7 @@ class _ProfilePageState extends ConsumerState<_ProfilePage> {
               ),
             ],
           ),
-          // ping button (only when active)
+          // ping button
           if (widget.isActive && mainGroup != null)
             Row(
               mainAxisAlignment: MainAxisAlignment.end,
@@ -431,7 +490,7 @@ class _ProfilePageState extends ConsumerState<_ProfilePage> {
                       ),
               ],
             ),
-          // servers list
+          // server list
           Expanded(
             child: displayNames.isEmpty
                 ? Center(
@@ -447,77 +506,107 @@ class _ProfilePageState extends ConsumerState<_ProfilePage> {
                     separatorBuilder: (_, __) => const Divider(height: 1),
                     itemBuilder: (context, i) {
                       final name = displayNames[i];
-                      final groupDelays =
-                          mainGroup != null ? delayMap[mainGroup.name] : null;
-                      final delay = groupDelays?[name];
                       final isSelected =
                           widget.isActive && name == selectedProxy;
-
-                      return InkWell(
+                      return _ServerTile(
+                        name: name,
+                        isSelected: isSelected,
+                        isActive: widget.isActive,
+                        testUrl: testUrl,
                         onTap: () => _selectProxy(name),
-                        borderRadius: BorderRadius.circular(10),
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 200),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 12,
-                          ),
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(10),
-                            color: isSelected
-                                ? context.colorScheme.primary.withOpacity(0.12)
-                                : Colors.transparent,
-                          ),
-                          child: Row(
-                            children: [
-                              if (isSelected)
-                                Container(
-                                  width: 3,
-                                  height: 20,
-                                  margin: const EdgeInsets.only(right: 10),
-                                  decoration: BoxDecoration(
-                                    color: context.colorScheme.primary,
-                                    borderRadius: BorderRadius.circular(2),
-                                  ),
-                                ),
-                              Expanded(
-                                child: Text(
-                                  name,
-                                  style: context.textTheme.bodyMedium?.copyWith(
-                                    fontWeight: isSelected
-                                        ? FontWeight.w600
-                                        : FontWeight.normal,
-                                  ),
-                                ),
-                              ),
-                              if (delay != null && delay > 0)
-                                Text(
-                                  '${delay}ms',
-                                  style: context.textTheme.labelSmall?.copyWith(
-                                    color: delay < 200
-                                        ? Colors.green
-                                        : delay < 500
-                                            ? Colors.orange
-                                            : Colors.red,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              if (isSelected) ...[
-                                const SizedBox(width: 8),
-                                Icon(
-                                  Icons.check_circle,
-                                  size: 16,
-                                  color: context.colorScheme.primary,
-                                ),
-                              ],
-                            ],
-                          ),
-                        ),
                       );
                     },
                   ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _ServerTile extends ConsumerWidget {
+  final String name;
+  final bool isSelected;
+  final bool isActive;
+  final String? testUrl;
+  final VoidCallback onTap;
+
+  const _ServerTile({
+    required this.name,
+    required this.isSelected,
+    required this.isActive,
+    required this.testUrl,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Use getDelayProvider for correct delay lookup (keyed by URL, not group name)
+    final delay = isActive
+        ? ref.watch(getDelayProvider(proxyName: name, testUrl: testUrl))
+        : null;
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(10),
+          color: isSelected
+              ? context.colorScheme.primary.withOpacity(0.12)
+              : Colors.transparent,
+        ),
+        child: Row(
+          children: [
+            if (isSelected)
+              Container(
+                width: 3,
+                height: 20,
+                margin: const EdgeInsets.only(right: 10),
+                decoration: BoxDecoration(
+                  color: context.colorScheme.primary,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            Expanded(
+              child: Text(
+                name,
+                style: context.textTheme.bodyMedium?.copyWith(
+                  fontWeight:
+                      isSelected ? FontWeight.w600 : FontWeight.normal,
+                ),
+              ),
+            ),
+            if (delay != null && delay > 0)
+              Text(
+                '${delay}ms',
+                style: context.textTheme.labelSmall?.copyWith(
+                  color: delay < 200
+                      ? Colors.green
+                      : delay < 500
+                          ? Colors.orange
+                          : Colors.red,
+                  fontWeight: FontWeight.w600,
+                ),
+              )
+            else if (delay == 0)
+              const SizedBox(
+                width: 14,
+                height: 14,
+                child: CircularProgressIndicator(strokeWidth: 1.5),
+              ),
+            if (isSelected) ...[
+              const SizedBox(width: 8),
+              Icon(
+                Icons.check_circle,
+                size: 16,
+                color: context.colorScheme.primary,
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }
