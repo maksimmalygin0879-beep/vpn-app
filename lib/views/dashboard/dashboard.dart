@@ -15,6 +15,7 @@ import 'package:honey_utility/widgets/widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:yaml/yaml.dart';
 
 import 'widgets/network_speed.dart';
@@ -105,16 +106,17 @@ class _DashboardViewState extends ConsumerState<DashboardView> {
             ),
           ),
           const SizedBox(height: 12),
-          ListenableBuilder(
-            listenable: _pageController,
-            builder: (_, __) {
-              final page = _pageController.hasClients
-                  ? (_pageController.page ?? 0).round()
-                  : 0;
-              return _PageDots(current: page, total: totalPages);
-            },
-          ),
-          const SizedBox(height: 8),
+          if (totalPages > 2)
+            ListenableBuilder(
+              listenable: _pageController,
+              builder: (_, __) {
+                final page = _pageController.hasClients
+                    ? (_pageController.page ?? 0).round()
+                    : 0;
+                return _PageDots(current: page, total: totalPages);
+              },
+            ),
+          if (totalPages > 2) const SizedBox(height: 8),
           Expanded(
             child: PageView.builder(
               controller: _pageController,
@@ -513,6 +515,7 @@ class _ProfilePage extends ConsumerStatefulWidget {
 class _ProfilePageState extends ConsumerState<_ProfilePage> {
   List<String> _proxyNames = [];
   bool _pinging = false;
+  bool _refreshing = false;
   String? _selectedProxy; // local optimistic selection
 
   @override
@@ -577,6 +580,16 @@ class _ProfilePageState extends ConsumerState<_ProfilePage> {
     }
   }
 
+  Future<void> _refresh() async {
+    if (widget.profile.url.isEmpty) return;
+    setState(() => _refreshing = true);
+    try {
+      await appController.updateProfile(widget.profile);
+    } finally {
+      if (mounted) setState(() => _refreshing = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final groups = widget.isActive ? ref.watch(groupsProvider) : <Group>[];
@@ -610,8 +623,15 @@ class _ProfilePageState extends ConsumerState<_ProfilePage> {
                   onPressed: widget.onPrev,
                   icon: const Icon(Icons.chevron_left_rounded, size: 28),
                   padding: EdgeInsets.zero,
-                  constraints:
-                      const BoxConstraints(minWidth: 32, minHeight: 32),
+                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                )
+              else if (kTelegramUrl.isNotEmpty)
+                IconButton(
+                  onPressed: () => launchUrl(Uri.parse(kTelegramUrl), mode: LaunchMode.externalApplication),
+                  icon: const Icon(Icons.telegram, size: 22),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                  tooltip: 'Telegram',
                 )
               else
                 const SizedBox(width: 32),
@@ -645,11 +665,25 @@ class _ProfilePageState extends ConsumerState<_ProfilePage> {
               ),
             ],
           ),
-          // ping button — always visible
+          // ping + refresh buttons
           ClipRect(
            child: Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
+                if (widget.profile.url.isNotEmpty)
+                  _refreshing
+                      ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                      : TextButton.icon(
+                          onPressed: _refresh,
+                          icon: const Icon(Icons.refresh, size: 16),
+                          label: Text('Обновить', style: context.textTheme.labelSmall),
+                          style: TextButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            minimumSize: Size.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                        ),
+                const SizedBox(width: 4),
                 _pinging
                     ? const SizedBox(
                         width: 18,
@@ -673,6 +707,8 @@ class _ProfilePageState extends ConsumerState<_ProfilePage> {
               ],
             ),
            ),
+          // Subscription info
+          _SubscriptionBar(profile: widget.profile),
           // server list
           Expanded(
             child: displayNames.isEmpty
@@ -792,6 +828,92 @@ class _ServerTile extends ConsumerWidget {
             ],
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Subscription info bar
+// ---------------------------------------------------------------------------
+String _fmtBytes(int bytes) {
+  if (bytes <= 0) return '0B';
+  if (bytes < 1024) return '${bytes}B';
+  if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)}KB';
+  if (bytes < 1024 * 1024 * 1024) return '${(bytes / (1024 * 1024)).toStringAsFixed(1)}MB';
+  return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(2)}GB';
+}
+
+class _SubscriptionBar extends StatelessWidget {
+  final Profile profile;
+  const _SubscriptionBar({required this.profile});
+
+  @override
+  Widget build(BuildContext context) {
+    final sub = profile.subscriptionInfo;
+    if (sub == null) return const SizedBox.shrink();
+
+    final used = sub.upload + sub.download;
+    final hasTraffic = sub.total > 0;
+    final hasExpiry = sub.expire > 0;
+    if (!hasTraffic && !hasExpiry) return const SizedBox.shrink();
+
+    final progress = hasTraffic ? (used / sub.total).clamp(0.0, 1.0) : 0.0;
+    final usedStr = hasTraffic ? _fmtBytes(used) : null;
+    final totalStr = hasTraffic ? _fmtBytes(sub.total) : null;
+
+    String? expiryStr;
+    if (hasExpiry) {
+      final dt = DateTime.fromMillisecondsSinceEpoch(sub.expire * 1000);
+      final d = dt.day.toString().padLeft(2, '0');
+      final m = dt.month.toString().padLeft(2, '0');
+      expiryStr = '$d.$m.${dt.year}';
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 6, bottom: 2),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (hasTraffic) ...[
+            Row(
+              children: [
+                Expanded(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(3),
+                    child: LinearProgressIndicator(
+                      value: progress,
+                      minHeight: 5,
+                      backgroundColor: context.colorScheme.surfaceContainerHighest,
+                      color: progress > 0.9
+                          ? Colors.red
+                          : progress > 0.7
+                              ? Colors.orange
+                              : context.colorScheme.primary,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  '$usedStr / $totalStr',
+                  style: context.textTheme.labelSmall?.copyWith(
+                    color: context.colorScheme.onSurface.withOpacity(0.6),
+                    fontSize: 10,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 2),
+          ],
+          if (expiryStr != null)
+            Text(
+              'Истекает: $expiryStr',
+              style: context.textTheme.labelSmall?.copyWith(
+                color: context.colorScheme.onSurface.withOpacity(0.5),
+                fontSize: 10,
+              ),
+            ),
+        ],
       ),
     );
   }

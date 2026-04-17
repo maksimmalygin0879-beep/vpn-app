@@ -9,7 +9,8 @@ import 'package:honey_utility/enum/enum.dart';
 import 'package:honey_utility/models/models.dart';
 import 'package:flutter/material.dart';
 
-const appName = "Honey's";
+const appName = "HoneyVPN";
+const kTelegramUrl = "https://t.me/honeyvpnbot"; // set empty string to hide
 const appHelperService = 'HoneyUtilityHelperService';
 const coreName = 'clash.meta';
 const browserUa =
