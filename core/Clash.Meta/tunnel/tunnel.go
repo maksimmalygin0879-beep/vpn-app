@@ -208,20 +208,6 @@ func Proxies() map[string]C.Proxy {
 	return proxies
 }
 
-func ProxiesWithProviders() map[string]C.Proxy {
-	allProxies := make(map[string]C.Proxy)
-	for name, proxy := range proxies {
-		allProxies[name] = proxy
-	}
-	for _, p := range providers {
-		for _, proxy := range p.Proxies() {
-			name := proxy.Name()
-			allProxies[name] = proxy
-		}
-	}
-	return allProxies
-}
-
 // Providers return all compatible providers
 func Providers() map[string]P.ProxyProvider {
 	return providers
@@ -357,7 +343,7 @@ func resolveMetadata(metadata *C.Metadata) (proxy C.Proxy, rule C.Rule, err erro
 		FindProcess: func() {
 			if attemptProcessLookup {
 				attemptProcessLookup = false
-				if !features.Android {
+				if !features.CMFA {
 					// normal check for process
 					uid, path, err := process.FindProcessName(metadata.NetWork.String(), metadata.SrcIP, int(metadata.SrcPort))
 					if err != nil {

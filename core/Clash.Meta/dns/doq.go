@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/metacubex/mihomo/common/pool"
 	"github.com/metacubex/mihomo/component/ca"
 	C "github.com/metacubex/mihomo/constant"
 	"github.com/metacubex/mihomo/log"
@@ -54,11 +55,6 @@ type dnsOverQUIC struct {
 	// re-opened when needed.
 	conn   *quic.Conn
 	connMu sync.RWMutex
-
-	// bytesPool is a *sync.Pool we use to store byte buffers in.  These byte
-	// buffers are used to read responses from the upstream.
-	bytesPool      *sync.Pool
-	bytesPoolGuard sync.Mutex
 
 	addr           string
 	dialer         *dnsDialer
@@ -203,24 +199,6 @@ func (doq *dnsOverQUIC) shouldRetry(err error) (ok bool) {
 	return isQUICRetryError(err)
 }
 
-// getBytesPool returns (creates if needed) a pool we store byte buffers in.
-func (doq *dnsOverQUIC) getBytesPool() (pool *sync.Pool) {
-	doq.bytesPoolGuard.Lock()
-	defer doq.bytesPoolGuard.Unlock()
-
-	if doq.bytesPool == nil {
-		doq.bytesPool = &sync.Pool{
-			New: func() interface{} {
-				b := make([]byte, MaxMsgSize)
-
-				return &b
-			},
-		}
-	}
-
-	return doq.bytesPool
-}
-
 // getConnection opens or returns an existing *quic.Conn. useCached
 // argument controls whether we should try to use the existing cached
 // connection.  If it is false, we will forcibly create a new connection and
@@ -301,7 +279,7 @@ func (doq *dnsOverQUIC) openStream(ctx context.Context, conn *quic.Conn) (*quic.
 }
 
 // openConnection opens a new QUIC connection.
-func (doq *dnsOverQUIC) openConnection(ctx context.Context) (conn *quic.Conn, err error) {
+func (doq *dnsOverQUIC) openConnection(ctx context.Context) (quicConn *quic.Conn, err error) {
 	// we're using bootstrapped address instead of what's passed to the function
 	// it does not create an actual connection, but it helps us determine
 	// what IP is actually reachable (when there're v4/v6 addresses).
@@ -320,7 +298,7 @@ func (doq *dnsOverQUIC) openConnection(ctx context.Context) (conn *quic.Conn, er
 
 	p, err := strconv.Atoi(port)
 	udpAddr := net.UDPAddr{IP: net.ParseIP(ip), Port: p}
-	udp, err := doq.dialer.ListenPacket(ctx, "udp", addr)
+	packetConn, err := doq.dialer.ListenPacket(ctx, "udp", addr)
 	if err != nil {
 		return nil, err
 	}
@@ -344,15 +322,16 @@ func (doq *dnsOverQUIC) openConnection(ctx context.Context) (conn *quic.Conn, er
 		return nil, err
 	}
 
-	transport := quic.Transport{Conn: udp}
+	transport := quic.Transport{Conn: packetConn}
 	transport.SetCreatedConn(true) // auto close conn
 	transport.SetSingleUse(true)   // auto close transport
-	conn, err = transport.Dial(ctx, &udpAddr, tlsConfig, doq.getQUICConfig())
+	quicConn, err = transport.Dial(ctx, &udpAddr, tlsConfig, doq.getQUICConfig())
 	if err != nil {
+		_ = packetConn.Close()
 		return nil, fmt.Errorf("opening quic connection to %s: %w", doq.addr, err)
 	}
 
-	return conn, nil
+	return quicConn, nil
 }
 
 // closeConnWithError closes the active connection with error to make sure that
@@ -386,12 +365,9 @@ func (doq *dnsOverQUIC) closeConnWithError(err error) {
 
 // readMsg reads the incoming DNS message from the QUIC stream.
 func (doq *dnsOverQUIC) readMsg(stream *quic.Stream) (m *D.Msg, err error) {
-	pool := doq.getBytesPool()
-	bufPtr := pool.Get().(*[]byte)
+	respBuf := pool.Get(MaxMsgSize)
+	defer pool.Put(respBuf)
 
-	defer pool.Put(bufPtr)
-
-	respBuf := *bufPtr
 	n, err := stream.Read(respBuf)
 	if err != nil && n == 0 {
 		return nil, fmt.Errorf("reading response from %s: %w", doq.Address(), err)

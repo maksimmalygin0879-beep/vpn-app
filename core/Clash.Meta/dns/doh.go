@@ -554,11 +554,11 @@ func (doh *dnsOverHTTPS) dialQuic(ctx context.Context, addr string, tlsCfg *tls.
 		IP:   net.ParseIP(ip),
 		Port: portInt,
 	}
-	conn, err := doh.dialer.ListenPacket(ctx, "udp", addr)
+	packetConn, err := doh.dialer.ListenPacket(ctx, "udp", addr)
 	if err != nil {
 		return nil, err
 	}
-	transport := quic.Transport{Conn: conn}
+	transport := quic.Transport{Conn: packetConn}
 	transport.SetCreatedConn(true) // auto close conn
 	transport.SetSingleUse(true)   // auto close transport
 	tlsCfg = tlsCfg.Clone()
@@ -568,7 +568,12 @@ func (doh *dnsOverHTTPS) dialQuic(ctx context.Context, addr string, tlsCfg *tls.
 		// It's ok if net.SplitHostPort returns an error - it could be a hostname/IP address without a port.
 		tlsCfg.ServerName = doh.url.Host
 	}
-	return transport.DialEarly(ctx, &udpAddr, tlsCfg, cfg)
+	quicConn, err := transport.DialEarly(ctx, &udpAddr, tlsCfg, cfg)
+	if err != nil {
+		_ = packetConn.Close()
+		return nil, err
+	}
+	return quicConn, nil
 }
 
 // probeH3 runs a test to check whether QUIC is faster than TLS for this
@@ -725,14 +730,10 @@ func (doh *dnsOverHTTPS) tlsDial(ctx context.Context, network string, config *tl
 	// TLS handshake dialTimeout will be used as connection deadLine.
 	conn := tls.Client(rawConn, config)
 
-	err = conn.SetDeadline(time.Now().Add(dialTimeout))
-	if err != nil {
-		// Must not happen in normal circumstances.
-		log.Errorln("cannot set deadline: %v", err)
-		return nil, err
-	}
+	ctx, cancel := context.WithTimeout(ctx, dialTimeout)
+	defer cancel()
 
-	err = conn.Handshake()
+	err = conn.HandshakeContext(ctx)
 	if err != nil {
 		defer conn.Close()
 		return nil, err

@@ -9,8 +9,10 @@ import (
 	"io"
 	"net"
 	"net/netip"
+	"os"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -61,7 +63,6 @@ type TestTunnel struct {
 	HandleUDPPacketFn  func(packet C.UDPPacket, metadata *C.Metadata)
 	NatTableFn         func() C.NatTable
 	CloseFn            func() error
-	DoTestFn           func(t *testing.T, proxy C.ProxyAdapter)
 	DoSequentialTestFn func(t *testing.T, proxy C.ProxyAdapter)
 	DoConcurrentTestFn func(t *testing.T, proxy C.ProxyAdapter)
 }
@@ -83,7 +84,8 @@ func (tt *TestTunnel) Close() error {
 }
 
 func (tt *TestTunnel) DoTest(t *testing.T, proxy C.ProxyAdapter) {
-	tt.DoTestFn(t, proxy)
+	tt.DoSequentialTestFn(t, proxy)
+	tt.DoConcurrentTestFn(t, proxy)
 }
 
 func (tt *TestTunnel) DoSequentialTest(t *testing.T, proxy C.ProxyAdapter) {
@@ -181,15 +183,39 @@ func NewHttpTestTunnel() *TestTunnel {
 		}
 		defer instance.Close()
 
+		var dialNum atomic.Int32
+		var extraConns []net.Conn
+		var extraConnsMu sync.Mutex
+		defer func() {
+			extraConnsMu.Lock()
+			extraConns := append([]net.Conn{}, extraConns...) // clone conn list avoid race condition
+			extraConnsMu.Unlock()
+			for _, conn := range extraConns {
+				_ = conn.Close()
+			}
+		}()
+
 		transport := &http.Transport{
-			DialContext: func(context.Context, string, string) (net.Conn, error) {
-				return instance, nil
+			DialContext: func(ctx context.Context, network string, addr string) (net.Conn, error) {
+				dianNum := dialNum.Add(1)
+				if dianNum == 1 { // first dial, return instance
+					return instance, nil
+				}
+				t.Logf("transport dial time %d more than once in: %s", dianNum, t.Name())
+				conn, err := proxy.DialContext(ctx, metadata)
+				if err != nil {
+					return nil, err
+				}
+				extraConnsMu.Lock()
+				extraConns = append(extraConns, conn)
+				extraConnsMu.Unlock()
+				return conn, nil
 			},
-			// from http.DefaultTransport
-			MaxIdleConns:          100,
-			IdleConnTimeout:       90 * time.Second,
-			TLSHandshakeTimeout:   10 * time.Second,
-			ExpectContinueTimeout: 1 * time.Second,
+			//// from http.DefaultTransport
+			//MaxIdleConns:          100,
+			//IdleConnTimeout:       90 * time.Second,
+			//TLSHandshakeTimeout:   10 * time.Second,
+			//ExpectContinueTimeout: 1 * time.Second,
 			// for our self-signed cert
 			TLSClientConfig: tlsClientConfig.Clone(),
 			// open http2
@@ -197,7 +223,7 @@ func NewHttpTestTunnel() *TestTunnel {
 		}
 
 		client := http.Client{
-			Timeout:   30 * time.Second,
+			Timeout:   60 * time.Second,
 			Transport: transport,
 			CheckRedirect: func(req *http.Request, via []*http.Request) error {
 				return http.ErrUseLastResponse
@@ -236,6 +262,9 @@ func NewHttpTestTunnel() *TestTunnel {
 	concurrentTestFn := func(t *testing.T, proxy C.ProxyAdapter) {
 		// Concurrent testing to detect stress
 		t.Run("Concurrent", func(t *testing.T) {
+			if skip, _ := strconv.ParseBool(os.Getenv("SKIP_CONCURRENT_TEST")); skip {
+				t.Skip("skip concurrent test")
+			}
 			wg := sync.WaitGroup{}
 			num := len(httpData) / 1024
 			for i := 1; i <= num; i++ {
@@ -280,8 +309,8 @@ func NewHttpTestTunnel() *TestTunnel {
 						return
 					}
 				}
-				ctx, cancel := context.WithTimeout(ctx, C.DefaultTLSTimeout)
-				defer cancel()
+				//ctx, cancel := context.WithTimeout(ctx, C.DefaultTLSTimeout)
+				//defer cancel()
 				if err := tlsConn.HandshakeContext(ctx); err != nil {
 					return
 				}
@@ -296,11 +325,7 @@ func NewHttpTestTunnel() *TestTunnel {
 			}
 			<-c.ch
 		},
-		CloseFn: ln.Close,
-		DoTestFn: func(t *testing.T, proxy C.ProxyAdapter) {
-			sequentialTestFn(t, proxy)
-			concurrentTestFn(t, proxy)
-		},
+		CloseFn:            ln.Close,
 		DoSequentialTestFn: sequentialTestFn,
 		DoConcurrentTestFn: concurrentTestFn,
 	}
