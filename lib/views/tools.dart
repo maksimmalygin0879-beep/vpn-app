@@ -3,109 +3,77 @@ import 'dart:io';
 import 'package:honey_utility/common/common.dart';
 import 'package:honey_utility/controller.dart';
 import 'package:honey_utility/l10n/l10n.dart';
-import 'package:honey_utility/models/models.dart';
 import 'package:honey_utility/providers/providers.dart';
 import 'package:honey_utility/views/about.dart';
-import 'package:honey_utility/views/access.dart';
 import 'package:honey_utility/views/application_setting.dart';
-import 'package:honey_utility/views/backup_and_restore.dart';
 import 'package:honey_utility/views/config/config.dart';
-import 'package:honey_utility/views/hotkey.dart';
+import 'package:honey_utility/views/config/general.dart';
 import 'package:honey_utility/widgets/widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
-import 'package:path/path.dart' show dirname, join;
 
-import 'config/advanced.dart';
-import 'developer.dart';
 import 'theme.dart';
 
-class ToolsView extends ConsumerStatefulWidget {
+class ToolsView extends ConsumerWidget {
   const ToolsView({super.key});
 
   @override
-  ConsumerState<ToolsView> createState() => _ToolViewState();
-}
-
-class _ToolViewState extends ConsumerState<ToolsView> {
-  Widget _buildNavigationMenuItem(NavigationItem navigationItem) {
-    return ListItem.open(
-      leading: navigationItem.icon,
-      title: Text(Intl.message(navigationItem.label.name)),
-      subtitle: navigationItem.description != null
-          ? Text(Intl.message(navigationItem.description!))
-          : null,
-      delegate: OpenDelegate(widget: navigationItem.builder(context)),
+  Widget build(BuildContext context, WidgetRef ref) {
+    final locale = ref.watch(
+      appSettingProvider.select((state) => state.locale),
     );
-  }
 
-  Widget _buildNavigationMenu(List<NavigationItem> navigationItems) {
-    return Column(
-      children: [
-        for (final navigationItem in navigationItems) ...[
-          _buildNavigationMenuItem(navigationItem),
-          navigationItems.last != navigationItem
-              ? const Divider(height: 0)
-              : Container(),
-        ],
-      ],
-    );
-  }
-
-  List<Widget> _getOtherList(bool enableDeveloperMode) {
-    return generateSection(
-      title: context.appLocalizations.other,
-      items: [
-
-        if (enableDeveloperMode) _DeveloperItem(),
-        _InfoItem(),
-      ],
-    );
-  }
-
-  List<Widget> _getSettingList() {
-    return generateSection(
-      title: context.appLocalizations.settings,
-      items: [
-        const _LocaleItem(),
-        const _ThemeItem(),
-        const _BackupItem(),
-        if (system.isDesktop) const _HotkeyItem(),
-        if (system.isWindows) const _LoopbackItem(),
-        if (system.isAndroid) const _AccessItem(),
-        const _ConfigItem(),
-        const _AdvancedConfigItem(),
-        const _SettingItem(),
-      ],
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final vm2 = ref.watch(
-      appSettingProvider.select(
-        (state) => VM2(state.locale, state.developerMode),
-      ),
-    );
     final items = [
-      Consumer(
-        builder: (_, ref, _) {
-          final state = ref.watch(moreToolsSelectorStateProvider);
-          if (state.navigationItems.isEmpty) {
-            return Container();
-          }
-          return Column(
-            children: [
-              ListHeader(title: context.appLocalizations.more),
-              _buildNavigationMenu(state.navigationItems),
-            ],
-          );
-        },
+      // ── Интерфейс ──────────────────────────────────────────────────
+      ...generateSection(
+        title: context.appLocalizations.settings,
+        isFirst: true,
+        items: [
+          _LocaleItem(),
+          const _ThemeItem(),
+        ],
       ),
-      ..._getSettingList(),
-      ..._getOtherList(vm2.b),
+
+      // ── Приложение ─────────────────────────────────────────────────
+      ...generateSection(
+        title: context.appLocalizations.application,
+        items: [
+          if (system.isDesktop) ...[
+            const AutoLaunchItem(),
+            const SilentLaunchItem(),
+          ],
+          const MinimizeItem(),
+          const AutoRunItem(),
+        ],
+      ),
+
+      // ── Подключение ────────────────────────────────────────────────
+      ...generateSection(
+        title: context.appLocalizations.connectivity,
+        items: [
+          const _RoutingItem(),
+          const AllowLanItem(),
+        ],
+      ),
+
+      // ── Другое ────────────────────────────────────────────────────
+      ...generateSection(
+        title: context.appLocalizations.other,
+        items: [
+          const _ResetItem(),
+        ],
+      ),
+
+      // ── О программе ───────────────────────────────────────────────
+      ...generateSection(
+        title: context.appLocalizations.about,
+        items: [
+          const _InfoItem(),
+        ],
+      ),
     ];
+
     return CommonScaffold(
       title: context.appLocalizations.tools,
       body: ListView.builder(
@@ -121,8 +89,8 @@ class _ToolViewState extends ConsumerState<ToolsView> {
 class _LocaleItem extends ConsumerWidget {
   const _LocaleItem();
 
-  String _getLocaleString(Locale? locale) {
-    if (locale == null) return appLocalizations.defaultText;
+  String _getLocaleString(BuildContext context, Locale? locale) {
+    if (locale == null) return context.appLocalizations.defaultText;
     return Intl.message(locale.toString());
   }
 
@@ -131,21 +99,20 @@ class _LocaleItem extends ConsumerWidget {
     final locale = ref.watch(
       appSettingProvider.select((state) => state.locale),
     );
-    final subTitle = locale ?? context.appLocalizations.defaultText;
     final currentLocale = utils.getLocaleForString(locale);
     return ListItem<Locale?>.options(
       leading: const Icon(Icons.language_outlined),
       title: Text(context.appLocalizations.language),
-      subtitle: Text(Intl.message(subTitle)),
+      subtitle: Text(_getLocaleString(context, currentLocale)),
       delegate: OptionsDelegate(
         title: context.appLocalizations.language,
         options: [null, ...AppLocalizations.delegate.supportedLocales],
-        onChanged: (Locale? locale) {
+        onChanged: (Locale? value) {
           ref
               .read(appSettingProvider.notifier)
-              .update((state) => state.copyWith(locale: locale?.toString()));
+              .update((state) => state.copyWith(locale: value?.toString()));
         },
-        textBuilder: (locale) => _getLocaleString(locale),
+        textBuilder: (locale) => _getLocaleString(context, locale),
         value: currentLocale,
       ),
     );
@@ -166,74 +133,13 @@ class _ThemeItem extends StatelessWidget {
   }
 }
 
-class _BackupItem extends StatelessWidget {
-  const _BackupItem();
+class _RoutingItem extends StatelessWidget {
+  const _RoutingItem();
 
   @override
   Widget build(BuildContext context) {
     return ListItem.open(
-      leading: const Icon(Icons.cloud_sync),
-      title: Text(context.appLocalizations.backupAndRestore),
-      subtitle: Text(context.appLocalizations.backupAndRestoreDesc),
-      delegate: OpenDelegate(widget: const BackupAndRestore()),
-    );
-  }
-}
-
-class _HotkeyItem extends StatelessWidget {
-  const _HotkeyItem();
-
-  @override
-  Widget build(BuildContext context) {
-    return ListItem.open(
-      leading: const Icon(Icons.keyboard),
-      title: Text(context.appLocalizations.hotkeyManagement),
-      subtitle: Text(context.appLocalizations.hotkeyManagementDesc),
-      delegate: OpenDelegate(widget: const HotKeyView()),
-    );
-  }
-}
-
-class _LoopbackItem extends StatelessWidget {
-  const _LoopbackItem();
-
-  @override
-  Widget build(BuildContext context) {
-    return ListItem(
-      leading: const Icon(Icons.lock),
-      title: Text(context.appLocalizations.loopback),
-      subtitle: Text(context.appLocalizations.loopbackDesc),
-      onTap: () {
-        windows?.runas(
-          '"${join(dirname(Platform.resolvedExecutable), "EnableLoopback.exe")}"',
-          '',
-        );
-      },
-    );
-  }
-}
-
-class _AccessItem extends StatelessWidget {
-  const _AccessItem();
-
-  @override
-  Widget build(BuildContext context) {
-    return ListItem.open(
-      leading: const Icon(Icons.view_list),
-      title: Text(context.appLocalizations.accessControl),
-      subtitle: Text(context.appLocalizations.accessControlDesc),
-      delegate: OpenDelegate(widget: const AccessView()),
-    );
-  }
-}
-
-class _ConfigItem extends StatelessWidget {
-  const _ConfigItem();
-
-  @override
-  Widget build(BuildContext context) {
-    return ListItem.open(
-      leading: const Icon(Icons.edit),
+      leading: const Icon(Icons.route_outlined),
       title: Text(context.appLocalizations.basicConfig),
       subtitle: Text(context.appLocalizations.basicConfigDesc),
       delegate: OpenDelegate(widget: const ConfigView()),
@@ -241,47 +147,23 @@ class _ConfigItem extends StatelessWidget {
   }
 }
 
-class _AdvancedConfigItem extends StatelessWidget {
-  const _AdvancedConfigItem();
+class _ResetItem extends ConsumerWidget {
+  const _ResetItem();
 
   @override
-  Widget build(BuildContext context) {
-    return ListItem.open(
-      leading: const Icon(Icons.build),
-      title: Text(context.appLocalizations.advancedConfig),
-      subtitle: Text(context.appLocalizations.advancedConfigDesc),
-      delegate: OpenDelegate(widget: const AdvancedConfigView()),
-    );
-  }
-}
-
-class _SettingItem extends StatelessWidget {
-  const _SettingItem();
-
-  @override
-  Widget build(BuildContext context) {
-    return ListItem.open(
-      leading: const Icon(Icons.settings),
-      title: Text(context.appLocalizations.application),
-      subtitle: Text(context.appLocalizations.applicationDesc),
-      delegate: OpenDelegate(widget: const ApplicationSettingView()),
-    );
-  }
-}
-
-class _DisclaimerItem extends StatelessWidget {
-  const _DisclaimerItem();
-
-  @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return ListItem(
-      leading: const Icon(Icons.gavel),
-      title: Text(context.appLocalizations.disclaimer),
+      leading: const Icon(Icons.restore, color: Colors.red),
+      title: Text(
+        context.appLocalizations.reset,
+        style: const TextStyle(color: Colors.red),
+      ),
       onTap: () async {
-        final isDisclaimerAccepted = await appController.showDisclaimer();
-        if (!isDisclaimerAccepted) {
-          appController.handleExit();
-        }
+        final res = await globalState.showMessage(
+          message: TextSpan(text: context.appLocalizations.resetTip),
+        );
+        if (res != true) return;
+        appController.handleExit(false);
       },
     );
   }
@@ -293,22 +175,9 @@ class _InfoItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListItem.open(
-      leading: const Icon(Icons.info),
+      leading: const Icon(Icons.info_outline),
       title: Text(context.appLocalizations.about),
       delegate: OpenDelegate(widget: const AboutView()),
-    );
-  }
-}
-
-class _DeveloperItem extends StatelessWidget {
-  const _DeveloperItem();
-
-  @override
-  Widget build(BuildContext context) {
-    return ListItem.open(
-      leading: const Icon(Icons.developer_board),
-      title: Text(context.appLocalizations.developerMode),
-      delegate: OpenDelegate(widget: const DeveloperView()),
     );
   }
 }
