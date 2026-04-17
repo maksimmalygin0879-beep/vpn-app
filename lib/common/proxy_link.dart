@@ -126,7 +126,7 @@ class _Proxy {
 
     bool first = true;
     final nestedKeys = <String>[];
-    // Write scalars first
+    // Write scalars and lists first
     fields.forEach((k, v) {
       if (v is Map) {
         nestedKeys.add(k);
@@ -160,6 +160,7 @@ class _Proxy {
 String _yamlVal(dynamic v) {
   if (v is String) return '"${_esc(v)}"';
   if (v is bool) return v ? 'true' : 'false';
+  if (v is List) return '[${v.map(_yamlVal).join(', ')}]';
   return v.toString();
 }
 
@@ -195,14 +196,18 @@ _Proxy? _parseVless(Uri uri) {
   final security = p['security'] ?? '';
   final sni = p['sni'] ?? p['host'] ?? host;
   final fp = p['fp'] ?? 'chrome';
-
   final flow = p['flow'] ?? '';
+
   final extra = <String, dynamic>{
     'uuid': uuid,
     'udp': true,
     'network': network == 'xhttp' || network == 'splithttp' ? 'xhttp' : network,
     if (flow.isNotEmpty) 'flow': flow,
   };
+
+  // packet-encoding
+  final pe = p['packetEncoding'] ?? p['packet-encoding'];
+  if (pe != null && pe.isNotEmpty) extra['packet-encoding'] = pe;
 
   if (security == 'reality') {
     extra['tls'] = true;
@@ -216,6 +221,17 @@ _Proxy? _parseVless(Uri uri) {
     extra['tls'] = true;
     extra['servername'] = sni;
     extra['client-fingerprint'] = fp;
+    if (p['insecure'] == '1') extra['skip-cert-verify'] = true;
+  }
+
+  // alpn (comma-separated string → YAML list)
+  final alpnStr = p['alpn'];
+  if (alpnStr != null && alpnStr.isNotEmpty) {
+    extra['alpn'] = alpnStr
+        .split(',')
+        .map((s) => s.trim())
+        .where((s) => s.isNotEmpty)
+        .toList();
   }
 
   if (network == 'ws') {
@@ -247,6 +263,21 @@ _Proxy? _parseVless(Uri uri) {
     extra['xhttp-opts'] = opts;
   } else if (network == 'grpc') {
     extra['grpc-opts'] = {'grpc-service-name': p['serviceName'] ?? ''};
+  } else if (network == 'h2') {
+    final opts = <String, dynamic>{
+      'path': p['path'] ?? '/',
+    };
+    final h2Host = p['host'] ?? host;
+    if (h2Host.isNotEmpty) opts['host'] = [h2Host];
+    extra['h2-opts'] = opts;
+  } else if (network == 'http') {
+    final opts = <String, dynamic>{
+      'method': p['method'] ?? 'GET',
+      'path': [p['path'] ?? '/'],
+    };
+    final httpHost = p['host'] ?? host;
+    if (httpHost.isNotEmpty) opts['headers'] = {'Host': [httpHost]};
+    extra['http-opts'] = opts;
   }
 
   return _Proxy(type: 'vless', name: name, server: host, port: port, extra: extra);
@@ -282,12 +313,38 @@ _Proxy? _parseSs(Uri uri) {
     if (parts.length >= 2) { method = parts[0]; password = parts.sublist(1).join(':'); }
   }
   if (method.isEmpty) return null;
+
+  final p = uri.queryParameters;
+  final extra = <String, dynamic>{'cipher': method, 'password': password, 'udp': true};
+
+  // Plugin support: "obfs-local;obfs=http;obfs-host=example.com"
+  final plugin = p['plugin'];
+  if (plugin != null && plugin.isNotEmpty) {
+    final parts = plugin.split(';');
+    extra['plugin'] = parts.first;
+    if (parts.length > 1) {
+      final opts = <String, dynamic>{};
+      for (final opt in parts.skip(1)) {
+        final eq = opt.indexOf('=');
+        if (eq != -1) {
+          opts[opt.substring(0, eq)] = opt.substring(eq + 1);
+        }
+      }
+      if (opts.isNotEmpty) extra['plugin-opts'] = opts;
+    }
+  }
+
+  // UDP over TCP
+  if (p['uot'] == '1' || p['udp-over-tcp'] == 'true') {
+    extra['udp-over-tcp'] = true;
+  }
+
   return _Proxy(
     type: 'ss',
     name: _decodeFrag(uri),
     server: host,
     port: uri.port,
-    extra: {'cipher': method, 'password': password, 'udp': true},
+    extra: extra,
   );
 }
 
@@ -339,6 +396,31 @@ _Proxy? _parseHysteria2(Uri uri) {
     extra['obfs'] = p['obfs'];
     extra['obfs-password'] = p['obfs-password'] ?? '';
   }
+
+  // Bandwidth limits
+  if (p['up'] != null && p['up']!.isNotEmpty) extra['up'] = p['up'];
+  if (p['down'] != null && p['down']!.isNotEmpty) extra['down'] = p['down'];
+
+  // ALPN (comma-separated → list)
+  final alpnStr = p['alpn'];
+  if (alpnStr != null && alpnStr.isNotEmpty) {
+    extra['alpn'] = alpnStr
+        .split(',')
+        .map((s) => s.trim())
+        .where((s) => s.isNotEmpty)
+        .toList();
+  }
+
+  // Port hopping (mport = "1000-2000" or similar)
+  final mport = p['mport'] ?? p['ports'];
+  if (mport != null && mport.isNotEmpty) extra['ports'] = mport;
+
+  // Hop interval
+  final hopInterval = p['hop-interval'];
+  if (hopInterval != null) {
+    extra['hop-interval'] = int.tryParse(hopInterval) ?? 30;
+  }
+
   return _Proxy(type: 'hysteria2', name: _decodeFrag(uri), server: host, port: uri.port, extra: extra);
 }
 
