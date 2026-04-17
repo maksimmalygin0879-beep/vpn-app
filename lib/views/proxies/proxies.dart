@@ -86,15 +86,20 @@ class _ProxiesViewState extends ConsumerState<ProxiesView> {
   Widget? _buildFAB() {
     return Column(
       mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.end,
       children: [
-        if (_isTab)
-          DelayTestButton(
-            onClick: () async {
-              await _proxiesTabKey.currentState?.delayTestCurrentGroup();
-            },
+        if (_isTab) ...[
+          SizedBox(
+            height: 56,
+            child: DelayTestButton(
+              onClick: () async {
+                await _proxiesTabKey.currentState?.delayTestCurrentGroup();
+              },
+            ),
           ),
-        if (_isTab) const SizedBox(height: 12),
-        const StartButton(),
+          const SizedBox(height: 12),
+        ],
+        const SizedBox(height: 56, child: StartButton()),
       ],
     );
   }

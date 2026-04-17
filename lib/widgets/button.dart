@@ -22,7 +22,7 @@ class CommonFloatingActionButton extends StatelessWidget {
         floatingActionButtonTheme: Theme.of(context).floatingActionButtonTheme
             .copyWith(
               extendedIconLabelSpacing: 0,
-              extendedPadding: EdgeInsets.all(16),
+              extendedPadding: const EdgeInsets.symmetric(horizontal: 16),
             ),
       ),
       child: FloatingActionButtonExtendedBuilder(
