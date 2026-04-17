@@ -354,6 +354,17 @@ extension ProfilesControllerExt on AppController {
     }
   }
 
+  // Add profile silently without navigating away (used from dashboard)
+  Future<Profile?> addProfileSilent(String url) async {
+    final profile = await loadingRun(tag: LoadingTag.profiles, () async {
+      return await Profile.normal(url: url).update();
+    }, title: appLocalizations.addProfile);
+    if (profile != null) {
+      putProfile(profile);
+    }
+    return profile;
+  }
+
   void setProfileAndAutoApply(Profile profile) {
     _ref.read(profilesProvider.notifier).put(profile);
     if (profile.id == _ref.read(currentProfileIdProvider)) {

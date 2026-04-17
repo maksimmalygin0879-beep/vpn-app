@@ -48,15 +48,35 @@ class _DashboardViewState extends ConsumerState<DashboardView> {
     super.dispose();
   }
 
-  void _openAddProfile() {
-    showSheet(
-      context: context,
-      builder: (_, type) => AdaptiveSheetScaffold(
-        type: type,
+  Future<void> _openAddProfile() async {
+    final url = await globalState.showCommonDialog<String>(
+      child: InputDialog(
         title: appLocalizations.addProfile,
-        body: AddProfileView(context: context),
+        labelText: 'URL / vless:// / hy2:// / base64',
+        value: '',
+        validator: (value) {
+          if (value == null || value.trim().isEmpty) {
+            return 'Введите ссылку или текст подписки';
+          }
+          return null;
+        },
       ),
     );
+    if (url == null || !mounted) return;
+    final profile = await appController.addProfileSilent(url.trim());
+    if (profile != null && mounted) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final profiles = ref.read(profilesProvider);
+        final idx = profiles.indexWhere((p) => p.id == profile.id);
+        if (idx >= 0) {
+          _pageController.animateToPage(
+            idx,
+            duration: const Duration(milliseconds: 400),
+            curve: Curves.easeInOut,
+          );
+        }
+      });
+    }
   }
 
   void _goToPage(int index) {
@@ -585,7 +605,12 @@ class _ProfilePageState extends ConsumerState<_ProfilePage> {
   }
 
   Future<void> _refresh() async {
-    if (widget.profile.url.isEmpty) return;
+    if (widget.profile.url.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Нет URL подписки — удалите профиль и добавьте заново'), duration: Duration(seconds: 3)),
+      );
+      return;
+    }
     setState(() => _refreshing = true);
     try {
       await appController.updateProfile(widget.profile);
@@ -675,19 +700,18 @@ class _ProfilePageState extends ConsumerState<_ProfilePage> {
            child: Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                if (widget.profile.url.isNotEmpty)
-                  _refreshing
-                      ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                      : TextButton.icon(
-                          onPressed: _refresh,
-                          icon: const Icon(Icons.refresh, size: 16),
-                          label: Text('Обновить', style: context.textTheme.labelSmall),
-                          style: TextButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            minimumSize: Size.zero,
-                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          ),
+                _refreshing
+                    ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                    : TextButton.icon(
+                        onPressed: _refresh,
+                        icon: const Icon(Icons.refresh, size: 16),
+                        label: Text('Обновить', style: context.textTheme.labelSmall),
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                         ),
+                      ),
                 const SizedBox(width: 4),
                 _pinging
                     ? const SizedBox(
