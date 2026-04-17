@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:honey_utility/common/common.dart';
 import 'package:honey_utility/controller.dart';
@@ -199,9 +200,152 @@ class _ModeSelector extends ConsumerWidget {
             );
           }).toList(),
         ),
+        const SizedBox(height: 8),
+        Center(child: _ModeIllustration(mode: mode)),
       ],
     );
   }
+}
+
+// Animated arrows illustration for mode selector
+class _ModeIllustration extends StatefulWidget {
+  final Mode mode;
+  const _ModeIllustration({required this.mode});
+
+  @override
+  State<_ModeIllustration> createState() => _ModeIllustrationState();
+}
+
+class _ModeIllustrationState extends State<_ModeIllustration>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
+  late Animation<double> _progress;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 700),
+    );
+    _progress = CurvedAnimation(parent: _ctrl, curve: Curves.easeOut);
+    _ctrl.forward();
+  }
+
+  @override
+  void didUpdateWidget(_ModeIllustration old) {
+    super.didUpdateWidget(old);
+    if (old.mode != widget.mode) {
+      _ctrl.forward(from: 0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  int get _arrowCount => switch (widget.mode) {
+        Mode.rule => 3,
+        Mode.global => 2,
+        Mode.direct => 1,
+        _ => 1,
+      };
+
+  @override
+  Widget build(BuildContext context) {
+    final color = context.colorScheme.primary;
+    return AnimatedBuilder(
+      animation: _progress,
+      builder: (_, __) => CustomPaint(
+        painter: _ArrowsPainter(
+          arrowCount: _arrowCount,
+          progress: _progress.value,
+          color: color,
+        ),
+        size: const Size(80, 72),
+      ),
+    );
+  }
+}
+
+class _ArrowsPainter extends CustomPainter {
+  final int arrowCount;
+  final double progress;
+  final Color color;
+
+  const _ArrowsPainter({
+    required this.arrowCount,
+    required this.progress,
+    required this.color,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = color.withOpacity(0.75)
+      ..strokeWidth = 2.2
+      ..strokeCap = StrokeCap.round
+      ..style = PaintingStyle.stroke;
+
+    final origin = Offset(size.width / 2, size.height * 0.15);
+    const arrowLen = 42.0;
+    const headLen = 9.0;
+    const headAngle = 28.0 * math.pi / 180;
+
+    // Angles (degrees from top, clockwise): spread based on count
+    final List<double> angles = switch (arrowCount) {
+      1 => [90.0],
+      2 => [55.0, 125.0],
+      _ => [30.0, 90.0, 150.0],
+    };
+
+    for (final deg in angles) {
+      final rad = deg * math.pi / 180;
+      final dx = math.cos(rad - math.pi / 2);
+      final dy = math.sin(rad - math.pi / 2);
+      final end = Offset(
+        origin.dx + arrowLen * progress * dx,
+        origin.dy + arrowLen * progress * dy,
+      );
+
+      // Stem with fade-in dot at origin
+      canvas.drawLine(origin, end, paint);
+
+      // Arrowhead (appears after 40% progress)
+      if (progress > 0.4) {
+        final t = ((progress - 0.4) / 0.6).clamp(0.0, 1.0);
+        final headPaint = Paint()
+          ..color = color.withOpacity(0.75 * t)
+          ..strokeWidth = 2.2
+          ..strokeCap = StrokeCap.round
+          ..style = PaintingStyle.stroke;
+        final stemAngle = math.atan2(dy, dx);
+        for (final sign in [-1.0, 1.0]) {
+          final ha = stemAngle + math.pi + sign * headAngle;
+          canvas.drawLine(
+            end,
+            Offset(end.dx + headLen * math.cos(ha), end.dy + headLen * math.sin(ha)),
+            headPaint,
+          );
+        }
+      }
+    }
+
+    // Origin dot
+    canvas.drawCircle(
+      origin,
+      3.0 * progress,
+      Paint()..color = color.withOpacity(0.75 * progress),
+    );
+  }
+
+  @override
+  bool shouldRepaint(_ArrowsPainter old) =>
+      old.progress != progress ||
+      old.arrowCount != arrowCount ||
+      old.color != color;
 }
 
 class _StatCard extends StatelessWidget {
@@ -258,7 +402,7 @@ class _AddPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
       child: Column(
         children: [
           Row(
@@ -270,7 +414,11 @@ class _AddPage extends StatelessWidget {
                   padding: EdgeInsets.zero,
                   constraints:
                       const BoxConstraints(minWidth: 32, minHeight: 32),
-                ),
+                )
+              else
+                const SizedBox(width: 32),
+              const Spacer(),
+              const SizedBox(width: 32),
             ],
           ),
           Expanded(
@@ -469,7 +617,8 @@ class _ProfilePageState extends ConsumerState<_ProfilePage> {
             ],
           ),
           // ping button — always visible
-          Row(
+          ClipRect(
+           child: Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
                 _pinging
@@ -494,6 +643,7 @@ class _ProfilePageState extends ConsumerState<_ProfilePage> {
                       ),
               ],
             ),
+           ),
           // server list
           Expanded(
             child: displayNames.isEmpty
@@ -597,10 +747,12 @@ class _ServerTile extends ConsumerWidget {
                 ),
               )
             else if (delay == 0)
-              const SizedBox(
-                width: 14,
-                height: 14,
-                child: CircularProgressIndicator(strokeWidth: 1.5),
+              ClipRect(
+                child: SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(strokeWidth: 1.5),
+                ),
               ),
             if (isSelected) ...[
               const SizedBox(width: 8),

@@ -73,7 +73,7 @@ extension InitControllerExt on AppController {
     if (existing.isNotEmpty) return;
     try {
       final profile = await Profile.normal(
-        label: '🍯 HoneyVPN',
+        label: '🍯HoneyVPN',
         url: honeySubUrl,
       ).update();
       if (profile != null) {
