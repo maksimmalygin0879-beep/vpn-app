@@ -488,6 +488,7 @@ class _ProfilePage extends ConsumerStatefulWidget {
 class _ProfilePageState extends ConsumerState<_ProfilePage> {
   List<String> _proxyNames = [];
   bool _pinging = false;
+  String? _selectedProxy; // local optimistic selection
 
   @override
   void initState() {
@@ -517,6 +518,8 @@ class _ProfilePageState extends ConsumerState<_ProfilePage> {
   }
 
   Future<void> _selectProxy(String proxyName) async {
+    // Optimistically highlight immediately
+    setState(() => _selectedProxy = proxyName);
     if (!widget.isActive) {
       ref.read(currentProfileIdProvider.notifier).value = widget.profile.id;
       appController.applyProfileDebounce();
@@ -556,7 +559,8 @@ class _ProfilePageState extends ConsumerState<_ProfilePage> {
         widget.isActive && widget.coreStatus == CoreStatus.connected;
 
     final mainGroup = groups.isEmpty ? null : groups.first;
-    final selectedProxy = mainGroup?.now ?? '';
+    // Use local optimistic selection, fall back to live group data
+    final selectedProxy = _selectedProxy ?? mainGroup?.now ?? '';
 
     // Live proxies: filter out group-type entries and special names
     final liveProxies = mainGroup?.all
