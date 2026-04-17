@@ -807,8 +807,8 @@ class _ServerTile extends ConsumerWidget {
                   color: delay < 200
                       ? Colors.green
                       : delay < 500
-                          ? Colors.orange
-                          : Colors.red,
+                          ? context.colorScheme.tertiary
+                          : context.colorScheme.error,
                   fontWeight: FontWeight.w600,
                 ),
               )
@@ -887,9 +887,9 @@ class _SubscriptionBar extends StatelessWidget {
                       minHeight: 5,
                       backgroundColor: context.colorScheme.surfaceContainerHighest,
                       color: progress > 0.9
-                          ? Colors.red
+                          ? context.colorScheme.error
                           : progress > 0.7
-                              ? Colors.orange
+                              ? context.colorScheme.tertiary
                               : context.colorScheme.primary,
                     ),
                   ),
