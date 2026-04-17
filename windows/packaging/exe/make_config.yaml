@@ -1,9 +1,9 @@
 script_template: inno_setup.iss
 app_id: 728B3532-C74B-4870-9068-BE70FE12A3E6
-app_name: HoneyUtility
-publisher: chen08209
+app_name: HoneyVPN
+publisher: HoneyVPN
 publisher_url: https://xvtrv.ru
-display_name: Honey's
+display_name: HoneyVPN
 executable_name: HoneyUtility.exe
 output_base_file_name: HoneyUtility.exe
 setup_icon_file: ..\windows\runner\resources\app_icon.ico
