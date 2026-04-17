@@ -683,7 +683,7 @@ class _ProfilePageState extends ConsumerState<_ProfilePage> {
                   icon: const Icon(Icons.telegram, size: 20),
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(minWidth: 28, minHeight: 32),
-                  tooltip: Telegram,
+                  tooltip: 'Telegram',
                   color: context.colorScheme.onSurface.withOpacity(0.5),
                 ),
               IconButton(
