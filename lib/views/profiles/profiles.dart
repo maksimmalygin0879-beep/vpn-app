@@ -445,7 +445,7 @@ class _ReorderableProfilesSheetState extends State<ReorderableProfilesSheet> {
     final profile = profiles[index];
     return CommonInputListItem(
       key: Key(profile.id.toString()),
-      trailing: ReorderableDelayedDragStartListener(
+      trailing: ReorderableDragStartListener(
         index: index,
         child: const Icon(Icons.drag_handle),
       ),
