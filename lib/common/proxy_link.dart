@@ -233,9 +233,8 @@ _Proxy? _parseVless(Uri uri) {
       try {
         final extraJson = jsonDecode(Uri.decodeComponent(p['extra']!)) as Map;
         const keyMap = <String, String>{
-          'scMaxEachPostBytes': 'max-upload-size',
-          'scMaxConcurrentPosts': 'max-concurrent-uploads',
-          'scMinPostsIntervalMs': 'min-upload-interval',
+          'scMaxEachPostBytes': 'sc-max-each-post-bytes',
+          'scMinPostsIntervalMs': 'sc-min-posts-interval-ms',
           'noGRPCHeader': 'no-grpc-header',
           'xPaddingBytes': 'x-padding-bytes',
         };
