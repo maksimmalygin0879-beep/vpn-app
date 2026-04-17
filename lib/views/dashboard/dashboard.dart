@@ -625,14 +625,6 @@ class _ProfilePageState extends ConsumerState<_ProfilePage> {
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
                 )
-              else if (kTelegramUrl.isNotEmpty)
-                IconButton(
-                  onPressed: () => launchUrl(Uri.parse(kTelegramUrl), mode: LaunchMode.externalApplication),
-                  icon: const Icon(Icons.telegram, size: 22),
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                  tooltip: 'Telegram',
-                )
               else
                 const SizedBox(width: 32),
               Expanded(
@@ -656,6 +648,15 @@ class _ProfilePageState extends ConsumerState<_ProfilePage> {
                   ],
                 ),
               ),
+              if (kTelegramUrl.isNotEmpty)
+                IconButton(
+                  onPressed: () => launchUrl(Uri.parse(kTelegramUrl), mode: LaunchMode.externalApplication),
+                  icon: const Icon(Icons.telegram, size: 20),
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 28, minHeight: 32),
+                  tooltip: Telegram,
+                  color: context.colorScheme.onSurface.withOpacity(0.5),
+                ),
               IconButton(
                 onPressed: widget.onNext,
                 icon: const Icon(Icons.chevron_right_rounded, size: 28),
