@@ -855,13 +855,14 @@ class _SubscriptionBar extends StatelessWidget {
     if (sub == null) return const SizedBox.shrink();
 
     final used = sub.upload + sub.download;
-    final hasTraffic = sub.total > 0;
+    final isUnlimited = sub.total == 0;
+    final hasTraffic = used > 0 || sub.total > 0;
     final hasExpiry = sub.expire > 0;
     if (!hasTraffic && !hasExpiry) return const SizedBox.shrink();
 
-    final progress = hasTraffic ? (used / sub.total).clamp(0.0, 1.0) : 0.0;
-    final usedStr = hasTraffic ? _fmtBytes(used) : null;
-    final totalStr = hasTraffic ? _fmtBytes(sub.total) : null;
+    final progress = (!isUnlimited && sub.total > 0) ? (used / sub.total).clamp(0.0, 1.0) : null;
+    final usedStr = _fmtBytes(used);
+    final totalStr = isUnlimited ? '∞' : _fmtBytes(sub.total);
 
     String? expiryStr;
     if (hasExpiry) {
@@ -886,11 +887,13 @@ class _SubscriptionBar extends StatelessWidget {
                       value: progress,
                       minHeight: 5,
                       backgroundColor: context.colorScheme.surfaceContainerHighest,
-                      color: progress > 0.9
-                          ? context.colorScheme.error
-                          : progress > 0.7
-                              ? context.colorScheme.tertiary
-                              : context.colorScheme.primary,
+                      color: progress == null
+                          ? context.colorScheme.primary
+                          : progress > 0.9
+                              ? context.colorScheme.error
+                              : progress > 0.7
+                                  ? context.colorScheme.tertiary
+                                  : context.colorScheme.primary,
                     ),
                   ),
                 ),

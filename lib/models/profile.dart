@@ -245,8 +245,18 @@ extension ProfileExtension on Profile {
 
     final disposition = response.headers.value('content-disposition');
     final userinfo = response.headers.value('subscription-userinfo');
+    final profileTitleRaw = response.headers.value('profile-title');
+    String? profileTitle;
+    if (profileTitleRaw != null) {
+      if (profileTitleRaw.startsWith('base64:')) {
+        try { profileTitle = utf8.decode(base64.decode(profileTitleRaw.substring(7))); } catch (_) {}
+      } else {
+        profileTitle = profileTitleRaw;
+      }
+    }
     return await copyWith(
       label: label.takeFirstValid([
+        profileTitle,
         utils.getFileNameForDisposition(disposition),
         id.toString(),
       ]),
