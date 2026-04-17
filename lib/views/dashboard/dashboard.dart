@@ -165,43 +165,49 @@ class _ModeSelector extends ConsumerWidget {
             color: context.colorScheme.onSurface.withOpacity(0.5),
           ),
         ),
-        const SizedBox(height: 6),
-        Row(
-          children: Mode.values.map((m) {
-            final active = m == mode;
-            return Expanded(
-              child: GestureDetector(
-                onTap: () => appController.changeMode(m),
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 150),
-                  margin: EdgeInsets.only(
-                    right: m != Mode.values.last ? 4 : 0,
-                  ),
-                  padding: const EdgeInsets.symmetric(vertical: 6),
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(8),
-                    color: active
-                        ? context.colorScheme.primary
-                        : context.colorScheme.surfaceContainerHighest,
-                  ),
-                  alignment: Alignment.center,
-                  child: Text(
-                    Intl.message(m.name),
-                    style: context.textTheme.labelSmall?.copyWith(
-                      color: active
-                          ? context.colorScheme.onPrimary
-                          : context.colorScheme.onSurface.withOpacity(0.7),
-                      fontWeight: active ? FontWeight.w600 : FontWeight.normal,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ),
-            );
-          }).toList(),
-        ),
         const SizedBox(height: 8),
-        Center(child: _ModeIllustration(mode: mode)),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            // Vertical column of mode buttons
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              mainAxisSize: MainAxisSize.min,
+              children: Mode.values.map((m) {
+                final active = m == mode;
+                return GestureDetector(
+                  onTap: () => appController.changeMode(m),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 150),
+                    margin: EdgeInsets.only(
+                      bottom: m != Mode.values.last ? 5 : 0,
+                    ),
+                    padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 18),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(8),
+                      color: active
+                          ? context.colorScheme.primary
+                          : context.colorScheme.surfaceContainerHighest,
+                    ),
+                    child: Text(
+                      Intl.message(m.name),
+                      style: context.textTheme.labelSmall?.copyWith(
+                        color: active
+                            ? context.colorScheme.onPrimary
+                            : context.colorScheme.onSurface.withOpacity(0.7),
+                        fontWeight: active ? FontWeight.w600 : FontWeight.normal,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+            const Spacer(),
+            // Arrow animation on the right
+            _ModeIllustration(mode: mode),
+          ],
+        ),
       ],
     );
   }
@@ -281,61 +287,78 @@ class _ArrowsPainter extends CustomPainter {
     required this.color,
   });
 
+  // Quadratic bezier interpolation helper
+  Offset _lerpOff(Offset a, Offset b, double t) =>
+      Offset(a.dx + (b.dx - a.dx) * t, a.dy + (b.dy - a.dy) * t);
+
   @override
   void paint(Canvas canvas, Size size) {
+    if (progress <= 0) return;
+
     final paint = Paint()
       ..color = color.withOpacity(0.75)
-      ..strokeWidth = 2.2
+      ..strokeWidth = 2.4
       ..strokeCap = StrokeCap.round
       ..style = PaintingStyle.stroke;
 
-    final origin = Offset(size.width / 2, size.height * 0.15);
-    const arrowLen = 42.0;
-    const headLen = 9.0;
-    const headAngle = 28.0 * math.pi / 180;
+    final cx = size.width / 2;
+    // Base point at bottom center
+    final p0 = Offset(cx, size.height * 0.88);
 
-    // Angles (degrees from top, clockwise): spread based on count
-    final List<double> angles = switch (arrowCount) {
-      1 => [90.0],
-      2 => [55.0, 125.0],
-      _ => [30.0, 90.0, 150.0],
+    // Each arrow defined as (control-point P1, tip P2).
+    // P1 close to center → arrows start straight up, then curve out (fork shape).
+    final List<(Offset, Offset)> arrows = switch (arrowCount) {
+      1 => [
+          (Offset(cx, size.height * 0.28), Offset(cx, size.height * 0.06)),
+        ],
+      2 => [
+          (Offset(cx - 4,  size.height * 0.44), Offset(cx - 26, size.height * 0.09)),
+          (Offset(cx + 4,  size.height * 0.44), Offset(cx + 26, size.height * 0.09)),
+        ],
+      _ => [
+          (Offset(cx - 4,  size.height * 0.46), Offset(cx - 28, size.height * 0.09)),
+          (Offset(cx,      size.height * 0.28), Offset(cx,       size.height * 0.06)),
+          (Offset(cx + 4,  size.height * 0.46), Offset(cx + 28, size.height * 0.09)),
+        ],
     };
 
-    for (final deg in angles) {
-      final rad = deg * math.pi / 180;
-      final dx = math.cos(rad - math.pi / 2);
-      final dy = math.sin(rad - math.pi / 2);
-      final end = Offset(
-        origin.dx + arrowLen * progress * dx,
-        origin.dy + arrowLen * progress * dy,
-      );
+    const headLen = 9.0;
+    const headAngle = 30.0 * math.pi / 180;
 
-      // Stem with fade-in dot at origin
-      canvas.drawLine(origin, end, paint);
+    for (final (p1, p2) in arrows) {
+      // Sub-bezier from 0 to progress via de Casteljau subdivision
+      final q1 = _lerpOff(p0, p1, progress);
+      final q2 = _lerpOff(_lerpOff(p0, p1, progress), _lerpOff(p1, p2, progress), progress);
 
-      // Arrowhead (appears after 40% progress)
-      if (progress > 0.4) {
-        final t = ((progress - 0.4) / 0.6).clamp(0.0, 1.0);
+      final path = Path()
+        ..moveTo(p0.dx, p0.dy)
+        ..quadraticBezierTo(q1.dx, q1.dy, q2.dx, q2.dy);
+      canvas.drawPath(path, paint);
+
+      // Arrowhead appears after 30% progress, tangent direction = q2 - q1
+      if (progress > 0.30) {
+        final t = ((progress - 0.30) / 0.70).clamp(0.0, 1.0);
+        final tangent = q2 - q1;
+        final stemAngle = math.atan2(tangent.dy, tangent.dx);
         final headPaint = Paint()
           ..color = color.withOpacity(0.75 * t)
-          ..strokeWidth = 2.2
+          ..strokeWidth = 2.4
           ..strokeCap = StrokeCap.round
           ..style = PaintingStyle.stroke;
-        final stemAngle = math.atan2(dy, dx);
         for (final sign in [-1.0, 1.0]) {
           final ha = stemAngle + math.pi + sign * headAngle;
           canvas.drawLine(
-            end,
-            Offset(end.dx + headLen * math.cos(ha), end.dy + headLen * math.sin(ha)),
+            q2,
+            Offset(q2.dx + headLen * math.cos(ha), q2.dy + headLen * math.sin(ha)),
             headPaint,
           );
         }
       }
     }
 
-    // Origin dot
+    // Dot at base
     canvas.drawCircle(
-      origin,
+      p0,
       3.0 * progress,
       Paint()..color = color.withOpacity(0.75 * progress),
     );
