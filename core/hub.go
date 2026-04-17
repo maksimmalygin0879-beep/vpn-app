@@ -62,7 +62,7 @@ func handleStopListener() bool {
 	runLock.Lock()
 	defer runLock.Unlock()
 	isRunning = false
-	listener.StopListener()
+	listener.Cleanup()
 	resolver.ResetConnection()
 	return true
 }
@@ -74,7 +74,7 @@ func handleGetIsInit() bool {
 func handleForceGC() {
 	log.Infoln("[APP] request force GC")
 	runtime.GC()
-	if features.Android {
+	if features.CMFA {
 		debug.FreeOSMemory()
 	}
 }
@@ -100,8 +100,6 @@ func handleGetProxies() ProxiesData {
 	runLock.Lock()
 	defer runLock.Unlock()
 
-	nameList := config.GetProxyNameList()
-
 	proxies := make(map[string]constant.Proxy)
 
 	for name, proxy := range tunnel.Proxies() {
@@ -114,21 +112,19 @@ func handleGetProxies() ProxiesData {
 	}
 
 	hasGlobal := false
-	allNames := make([]string, 0, len(nameList)+1)
+	allNames := make([]string, 0)
 
-	for _, name := range nameList {
+	for name, p := range proxies {
 		if name == "GLOBAL" {
 			hasGlobal = true
+			continue
 		}
-
-		p, ok := proxies[name]
-		if !ok || p == nil {
+		if p == nil {
 			continue
 		}
 		switch p.Type() {
 		case constant.Selector, constant.URLTest, constant.Fallback, constant.Relay, constant.LoadBalance:
 			allNames = append(allNames, name)
-		default:
 		}
 	}
 
@@ -156,7 +152,7 @@ func handleChangeProxy(data string, fn func(string string)) {
 		}
 		groupName := *params.GroupName
 		proxyName := *params.ProxyName
-		proxies := tunnel.ProxiesWithProviders()
+		proxies := getProxiesWithProviders()
 		group, ok := proxies[groupName]
 		if !ok {
 			fn("Not found group")
@@ -184,7 +180,7 @@ func handleChangeProxy(data string, fn func(string string)) {
 }
 
 func handleGetTraffic(onlyStatisticsProxy bool) string {
-	up, down := statistic.DefaultManager.NowTraffic(onlyStatisticsProxy)
+	up, down := statistic.DefaultManager.Now()
 	traffic := map[string]int64{
 		"up":   up,
 		"down": down,
@@ -198,7 +194,7 @@ func handleGetTraffic(onlyStatisticsProxy bool) string {
 }
 
 func handleGetTotalTraffic(onlyStatisticsProxy bool) string {
-	up, down := statistic.DefaultManager.TotalTraffic(onlyStatisticsProxy)
+	up, down := statistic.DefaultManager.Total()
 	traffic := map[string]int64{
 		"up":   up,
 		"down": down,
@@ -233,7 +229,7 @@ func handleAsyncTestDelay(paramsString string, fn func(string)) {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Millisecond*time.Duration(params.Timeout))
 		defer cancel()
 
-		proxies := tunnel.ProxiesWithProviders()
+		proxies := getProxiesWithProviders()
 		proxy := proxies[params.ProxyName]
 
 		delayData := &Delay{
@@ -247,7 +243,7 @@ func handleAsyncTestDelay(paramsString string, fn func(string)) {
 			return false, nil
 		}
 
-		testUrl := constant.DefaultTestURL
+		testUrl := customTestURL
 
 		if params.TestUrl != "" {
 			testUrl = params.TestUrl
@@ -358,28 +354,27 @@ func handleGetExternalProvider(externalProviderName string) string {
 
 func handleUpdateGeoData(geoType string, geoName string, fn func(value string)) {
 	go func() {
-		path := constant.Path.Resolve(geoName)
 		switch geoType {
 		case "MMDB":
-			err := updater.UpdateMMDBWithPath(path)
+			err := updater.UpdateMMDB()
 			if err != nil {
 				fn(err.Error())
 				return
 			}
 		case "ASN":
-			err := updater.UpdateASNWithPath(path)
+			err := updater.UpdateASN()
 			if err != nil {
 				fn(err.Error())
 				return
 			}
 		case "GEOIP":
-			err := updater.UpdateGeoIpWithPath(path)
+			err := updater.UpdateGeoIp()
 			if err != nil {
 				fn(err.Error())
 				return
 			}
 		case "GEOSITE":
-			err := updater.UpdateGeoSiteWithPath(path)
+			err := updater.UpdateGeoSite()
 			if err != nil {
 				fn(err.Error())
 				return
@@ -550,31 +545,7 @@ func handleSetupConfig(bytes []byte) string {
 }
 
 func init() {
-	adapter.UrlTestHook = func(url string, name string, delay uint16) {
-		delayData := &Delay{
-			Url:  url,
-			Name: name,
-		}
-		if delay == 0 {
-			delayData.Value = -1
-		} else {
-			delayData.Value = int32(delay)
-		}
-		sendMessage(Message{
-			Type: DelayMessage,
-			Data: delayData,
-		})
-	}
-	statistic.DefaultRequestNotify = func(c statistic.Tracker) {
-		sendMessage(Message{
-			Type: RequestMessage,
-			Data: c,
-		})
-	}
-	executor.DefaultProviderLoadedHook = func(providerName string) {
-		sendMessage(Message{
-			Type: LoadedMessage,
-			Data: providerName,
-		})
-	}
+	// Note: UrlTestHook, DefaultRequestNotify, DefaultProviderLoadedHook
+	// were FlClash-specific extensions removed in official metacubex/mihomo.
+	// Delay updates are handled via handleAsyncTestDelay instead.
 }

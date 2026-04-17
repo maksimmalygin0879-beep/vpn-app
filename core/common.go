@@ -30,12 +30,27 @@ import (
 )
 
 var (
-	currentConfig *config.Config
-	version       = 0
-	isRunning     = false
-	runLock       sync.Mutex
-	mBatch, _     = batch.New[bool](context.Background(), batch.WithConcurrencyNum[bool](50))
+	currentConfig  *config.Config
+	version        = 0
+	isRunning      = false
+	runLock        sync.Mutex
+	mBatch, _      = batch.New[bool](context.Background(), batch.WithConcurrencyNum[bool](50))
+	customTestURL  = constant.DefaultTestURL
 )
+
+// getProxiesWithProviders replaces the removed getProxiesWithProviders()
+func getProxiesWithProviders() map[string]constant.Proxy {
+	proxies := make(map[string]constant.Proxy)
+	for name, proxy := range tunnel.Proxies() {
+		proxies[name] = proxy
+	}
+	for _, p := range tunnel.Providers() {
+		for _, proxy := range p.Proxies() {
+			proxies[proxy.Name()] = proxy
+		}
+	}
+	return proxies
+}
 
 func getExternalProvidersRaw() map[string]cp.Provider {
 	eps := make(map[string]cp.Provider)
@@ -56,6 +71,13 @@ func toExternalProvider(p cp.Provider) (*ExternalProvider, error) {
 	switch p.(type) {
 	case *provider.ProxySetProvider:
 		psp := p.(*provider.ProxySetProvider)
+		// Extract subscriptionInfo via JSON since the field is private in new API
+		var apiData struct {
+			SubscriptionInfo *provider.SubscriptionInfo `json:"subscriptionInfo"`
+		}
+		if data, err := json.Marshal(psp); err == nil {
+			_ = json.Unmarshal(data, &apiData)
+		}
 		return &ExternalProvider{
 			Name:             psp.Name(),
 			Type:             psp.Type().String(),
@@ -63,7 +85,7 @@ func toExternalProvider(p cp.Provider) (*ExternalProvider, error) {
 			Count:            psp.Count(),
 			UpdateAt:         psp.UpdatedAt(),
 			Path:             psp.Vehicle().Path(),
-			SubscriptionInfo: psp.GetSubscriptionInfo(),
+			SubscriptionInfo: apiData.SubscriptionInfo,
 		}, nil
 	case *rp.RuleSetProvider:
 		rsp := p.(*rp.RuleSetProvider)
@@ -128,17 +150,17 @@ func updateListeners() {
 	listener.ReCreateShadowSocks(general.ShadowSocksConfig, tunnel.Tunnel)
 	listener.ReCreateVmess(general.VmessConfig, tunnel.Tunnel)
 	listener.ReCreateTuic(general.TuicServer, tunnel.Tunnel)
-	if !features.Android {
+	if !features.CMFA {
 		listener.ReCreateTun(general.Tun, tunnel.Tunnel)
 	}
 }
 
 func stopListeners() {
-	listener.StopListener()
+	listener.Cleanup()
 }
 
 func patchSelectGroup(mapping map[string]string) {
-	for name, proxy := range tunnel.ProxiesWithProviders() {
+	for name, proxy := range getProxiesWithProviders() {
 		outbound, ok := proxy.(*adapter.Proxy)
 		if !ok {
 			continue
@@ -240,7 +262,7 @@ func applyConfig(params *SetupParams) error {
 	runLock.Lock()
 	defer runLock.Unlock()
 	var err error
-	constant.DefaultTestURL = params.TestURL
+	customTestURL = params.TestURL
 	currentConfig, err = executor.ParseWithPath(filepath.Join(constant.Path.HomeDir(), "config.yaml"))
 	if err != nil {
 		currentConfig, _ = config.ParseRawConfig(config.DefaultRawConfig())
