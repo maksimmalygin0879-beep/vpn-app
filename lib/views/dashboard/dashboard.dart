@@ -747,11 +747,10 @@ class _ServerTile extends ConsumerWidget {
                 ),
               )
             else if (delay == 0)
-              ClipRect(
-                child: SizedBox(
-                  width: 14,
-                  height: 14,
-                  child: CircularProgressIndicator(strokeWidth: 1.5),
+              Text(
+                'n/a',
+                style: context.textTheme.labelSmall?.copyWith(
+                  color: context.colorScheme.onSurface.withOpacity(0.35),
                 ),
               ),
             if (isSelected) ...[
