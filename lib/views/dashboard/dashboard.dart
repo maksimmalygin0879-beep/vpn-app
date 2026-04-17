@@ -383,7 +383,12 @@ class _ProfilePageState extends ConsumerState<_ProfilePage> {
   }
 
   Future<void> _ping() async {
-    if (!widget.isActive) return;
+    // Activate profile first if not active (loads config into core without routing traffic)
+    if (!widget.isActive) {
+      ref.read(currentProfileIdProvider.notifier).value = widget.profile.id;
+      appController.applyProfileDebounce();
+      await Future.delayed(const Duration(milliseconds: 1000));
+    }
     final groups = ref.read(groupsProvider);
     if (groups.isEmpty) return;
     final group = groups.first;
@@ -463,9 +468,8 @@ class _ProfilePageState extends ConsumerState<_ProfilePage> {
               ),
             ],
           ),
-          // ping button
-          if (widget.isActive && mainGroup != null)
-            Row(
+          // ping button — always visible
+          Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
                 _pinging

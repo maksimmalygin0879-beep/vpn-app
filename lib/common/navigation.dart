@@ -33,22 +33,7 @@ class Navigation {
         builder: (_) =>
             const ProfilesView(key: GlobalObjectKey(PageLabel.profiles)),
       ),
-      NavigationItem(
-        icon: Icon(Icons.view_timeline),
-        label: PageLabel.requests,
-        builder: (_) =>
-            const RequestsView(key: GlobalObjectKey(PageLabel.requests)),
-        description: 'requestsDesc',
-        modes: [NavigationItemMode.desktop, NavigationItemMode.more],
-      ),
-      NavigationItem(
-        icon: Icon(Icons.ballot),
-        label: PageLabel.connections,
-        builder: (_) =>
-            const ConnectionsView(key: GlobalObjectKey(PageLabel.connections)),
-        description: 'connectionsDesc',
-        modes: [NavigationItemMode.desktop, NavigationItemMode.more],
-      ),
+
       NavigationItem(
         icon: Icon(Icons.storage),
         label: PageLabel.resources,
@@ -62,9 +47,7 @@ class Navigation {
         label: PageLabel.logs,
         builder: (_) => const LogsView(key: GlobalObjectKey(PageLabel.logs)),
         description: 'logsDesc',
-        modes: openLogs
-            ? [NavigationItemMode.desktop, NavigationItemMode.more]
-            : [],
+        modes: [NavigationItemMode.desktop, NavigationItemMode.mobile],
       ),
       NavigationItem(
         icon: Icon(Icons.construction),
