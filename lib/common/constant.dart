@@ -10,7 +10,7 @@ import 'package:honey_utility/models/models.dart';
 import 'package:flutter/material.dart';
 
 const appName = "HoneyVPN";
-const kTelegramUrl = "https://t.me/honeyvpnbot"; // set empty string to hide
+const kTelegramUrl = ""; // Per-profile TG URLs come from subscription profile-web-page-url header
 const appHelperService = 'HoneyUtilityHelperService';
 const coreName = 'clash.meta';
 const browserUa =

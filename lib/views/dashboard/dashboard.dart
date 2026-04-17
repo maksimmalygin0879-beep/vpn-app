@@ -677,15 +677,20 @@ class _ProfilePageState extends ConsumerState<_ProfilePage> {
                   ],
                 ),
               ),
-              if (kTelegramUrl.isNotEmpty)
-                IconButton(
-                  onPressed: () => launchUrl(Uri.parse(kTelegramUrl), mode: LaunchMode.externalApplication),
+              Builder(builder: (ctx) {
+                final tgUrl = widget.profile.subscriptionInfo?.webPageUrl?.isNotEmpty == true
+                    ? widget.profile.subscriptionInfo!.webPageUrl!
+                    : (kTelegramUrl.isNotEmpty ? kTelegramUrl : null);
+                if (tgUrl == null) return const SizedBox.shrink();
+                return IconButton(
+                  onPressed: () => launchUrl(Uri.parse(tgUrl), mode: LaunchMode.externalApplication),
                   icon: const Icon(Icons.telegram, size: 20),
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(minWidth: 28, minHeight: 32),
                   tooltip: 'Telegram',
                   color: context.colorScheme.onSurface.withOpacity(0.5),
-                ),
+                );
+              }),
               IconButton(
                 onPressed: widget.onNext,
                 icon: const Icon(Icons.chevron_right_rounded, size: 28),

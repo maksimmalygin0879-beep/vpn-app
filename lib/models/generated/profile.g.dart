@@ -12,6 +12,7 @@ _SubscriptionInfo _$SubscriptionInfoFromJson(Map<String, dynamic> json) =>
       download: (json['download'] as num?)?.toInt() ?? 0,
       total: (json['total'] as num?)?.toInt() ?? 0,
       expire: (json['expire'] as num?)?.toInt() ?? 0,
+      webPageUrl: json['webPageUrl'] as String?,
     );
 
 Map<String, dynamic> _$SubscriptionInfoToJson(_SubscriptionInfo instance) =>
@@ -20,6 +21,7 @@ Map<String, dynamic> _$SubscriptionInfoToJson(_SubscriptionInfo instance) =>
       'download': instance.download,
       'total': instance.total,
       'expire': instance.expire,
+      'webPageUrl': instance.webPageUrl,
     };
 
 _Profile _$ProfileFromJson(Map<String, dynamic> json) => _Profile(

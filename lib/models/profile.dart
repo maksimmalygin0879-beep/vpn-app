@@ -20,24 +20,28 @@ abstract class SubscriptionInfo with _$SubscriptionInfo {
     @Default(0) int download,
     @Default(0) int total,
     @Default(0) int expire,
+    String? webPageUrl,
   }) = _SubscriptionInfo;
 
   factory SubscriptionInfo.fromJson(Map<String, Object?> json) =>
       _$SubscriptionInfoFromJson(json);
 
-  factory SubscriptionInfo.formHString(String? info) {
-    if (info == null) return const SubscriptionInfo();
+  factory SubscriptionInfo.formHString(String? info, {String? webPageUrl}) {
+    if (info == null) return SubscriptionInfo(webPageUrl: webPageUrl);
     final list = info.split(';');
     Map<String, int?> map = {};
     for (final i in list) {
       final keyValue = i.trim().split('=');
-      map[keyValue[0]] = int.tryParse(keyValue[1]);
+      if (keyValue.length >= 2) {
+        map[keyValue[0]] = int.tryParse(keyValue[1]);
+      }
     }
     return SubscriptionInfo(
       upload: map['upload'] ?? 0,
       download: map['download'] ?? 0,
       total: map['total'] ?? 0,
       expire: map['expire'] ?? 0,
+      webPageUrl: webPageUrl,
     );
   }
 }
@@ -254,13 +258,14 @@ extension ProfileExtension on Profile {
         profileTitle = profileTitleRaw;
       }
     }
+    final webPageUrl = response.headers.value('profile-web-page-url');
     return await copyWith(
       label: label.takeFirstValid([
         profileTitle,
         utils.getFileNameForDisposition(disposition),
         id.toString(),
       ]),
-      subscriptionInfo: SubscriptionInfo.formHString(userinfo),
+      subscriptionInfo: SubscriptionInfo.formHString(userinfo, webPageUrl: webPageUrl),
     ).saveFile(bytes);
   }
 
