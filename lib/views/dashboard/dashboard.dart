@@ -580,6 +580,7 @@ class _ServerTile extends ConsumerWidget {
                 style: context.textTheme.bodyMedium?.copyWith(
                   fontWeight:
                       isSelected ? FontWeight.w600 : FontWeight.normal,
+                  fontFamilyFallback: const ['Twemoji'],
                 ),
               ),
             ),

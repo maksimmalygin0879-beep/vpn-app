@@ -142,18 +142,28 @@ class ApplicationState extends ConsumerState<Application> {
           theme: ThemeData(
             useMaterial3: true,
             pageTransitionsTheme: _pageTransitionsTheme,
+            fontFamily: null,
             colorScheme: _getAppColorScheme(
               brightness: Brightness.light,
               primaryColor: themeProps.primaryColor,
+            ),
+          ).copyWith(
+            textTheme: ThemeData(useMaterial3: true).textTheme.apply(
+              fontFamilyFallback: ['Twemoji'],
             ),
           ),
           darkTheme: ThemeData(
             useMaterial3: true,
             pageTransitionsTheme: _pageTransitionsTheme,
+            fontFamily: null,
             colorScheme: _getAppColorScheme(
               brightness: Brightness.dark,
               primaryColor: themeProps.primaryColor,
             ).toPureBlack(themeProps.pureBlack),
+          ).copyWith(
+            textTheme: ThemeData(useMaterial3: true, brightness: Brightness.dark).textTheme.apply(
+              fontFamilyFallback: ['Twemoji'],
+            ),
           ),
           home: child!,
         );
