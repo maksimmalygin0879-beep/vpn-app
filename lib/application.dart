@@ -149,7 +149,7 @@ class ApplicationState extends ConsumerState<Application> {
             ),
           ).copyWith(
             textTheme: ThemeData(useMaterial3: true).textTheme.apply(
-              fontFamilyFallback: ['Twemoji'],
+              fontFamilyFallback: ['NotoColorEmoji', 'Twemoji'],
             ),
           ),
           darkTheme: ThemeData(
@@ -162,7 +162,7 @@ class ApplicationState extends ConsumerState<Application> {
             ).toPureBlack(themeProps.pureBlack),
           ).copyWith(
             textTheme: ThemeData(useMaterial3: true, brightness: Brightness.dark).textTheme.apply(
-              fontFamilyFallback: ['Twemoji'],
+              fontFamilyFallback: ['NotoColorEmoji', 'Twemoji'],
             ),
           ),
           home: child!,

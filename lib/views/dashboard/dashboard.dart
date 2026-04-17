@@ -170,7 +170,8 @@ class _ModeSelector extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             // Vertical column of mode buttons
-            Column(
+            IntrinsicWidth(
+              child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               mainAxisSize: MainAxisSize.min,
               children: Mode.values.map((m) {
@@ -202,6 +203,7 @@ class _ModeSelector extends ConsumerWidget {
                   ),
                 );
               }).toList(),
+            ),
             ),
             const Spacer(),
             // Arrow animation on the right
@@ -757,7 +759,7 @@ class _ServerTile extends ConsumerWidget {
                 style: context.textTheme.bodyMedium?.copyWith(
                   fontWeight:
                       isSelected ? FontWeight.w600 : FontWeight.normal,
-                  fontFamilyFallback: const ['Twemoji'],
+                  fontFamilyFallback: const ['NotoColorEmoji', 'Twemoji'],
                 ),
               ),
             ),
