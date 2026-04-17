@@ -159,7 +159,6 @@ class _ModeSelector extends ConsumerWidget {
     );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
       children: [
         Text(
           appLocalizations.outboundMode,
@@ -168,49 +167,54 @@ class _ModeSelector extends ConsumerWidget {
           ),
         ),
         const SizedBox(height: 8),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            // Vertical column of mode buttons
-            IntrinsicWidth(
-              child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              mainAxisSize: MainAxisSize.min,
-              children: Mode.values.map((m) {
-                final active = m == mode;
-                return GestureDetector(
-                  onTap: () => appController.changeMode(m),
-                  child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 150),
-                    margin: EdgeInsets.only(
-                      bottom: m != Mode.values.last ? 5 : 0,
-                    ),
-                    padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 18),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(8),
-                      color: active
-                          ? context.colorScheme.primary
-                          : context.colorScheme.surfaceContainerHighest,
-                    ),
-                    child: Text(
-                      Intl.message(m.name),
-                      style: context.textTheme.labelSmall?.copyWith(
-                        color: active
-                            ? context.colorScheme.onPrimary
-                            : context.colorScheme.onSurface.withOpacity(0.7),
-                        fontWeight: active ? FontWeight.w600 : FontWeight.normal,
+        Expanded(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Buttons fill full height
+              Expanded(
+                flex: 5,
+                child: Column(
+                  mainAxisSize: MainAxisSize.max,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: Mode.values.map((m) {
+                    final active = m == mode;
+                    final isLast = m == Mode.values.last;
+                    return Expanded(
+                      child: GestureDetector(
+                        onTap: () => appController.changeMode(m),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 150),
+                          margin: EdgeInsets.only(bottom: isLast ? 0 : 5),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(8),
+                            color: active
+                                ? context.colorScheme.primary
+                                : context.colorScheme.surfaceContainerHighest,
+                          ),
+                          alignment: Alignment.center,
+                          child: Text(
+                            Intl.message(m.name),
+                            style: context.textTheme.labelSmall?.copyWith(
+                              color: active
+                                  ? context.colorScheme.onPrimary
+                                  : context.colorScheme.onSurface.withOpacity(0.7),
+                              fontWeight: active ? FontWeight.w600 : FontWeight.normal,
+                            ),
+                          ),
+                        ),
                       ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ),
-                );
-              }).toList(),
-            ),
-            ),
-            const Spacer(),
-            // Arrow animation on the right
-            _ModeIllustration(mode: mode),
-          ],
+                    );
+                  }).toList(),
+                ),
+              ),
+              // Arrows — centered, close to buttons
+              Expanded(
+                flex: 4,
+                child: Center(child: _ModeIllustration(mode: mode)),
+              ),
+            ],
+          ),
         ),
       ],
     );
