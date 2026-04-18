@@ -13,7 +13,6 @@ class TrafficUsage extends ConsumerWidget {
     final currentProfile = ref.watch(currentProfileProvider);
     final sub = currentProfile?.subscriptionInfo;
 
-    final upBytes = totalTraffic.up;
     final downBytes = totalTraffic.down;
     final subTotal = sub?.total ?? 0;
     final subUsed = (sub?.upload ?? 0) + (sub?.download ?? 0);
@@ -34,13 +33,6 @@ class TrafficUsage extends ConsumerWidget {
           bytes: subTotal > 0 ? subUsed : downBytes,
           limitBytes: subTotal,
           color: context.colorScheme.primary,
-        ),
-        const SizedBox(height: 8),
-        _TrafficBar(
-          label: "LTE ↑",
-          bytes: upBytes,
-          limitBytes: 0,
-          color: context.colorScheme.secondary,
         ),
       ],
     );
