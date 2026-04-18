@@ -249,12 +249,14 @@ _Proxy? _parseVless(Uri uri) {
       try {
         final extraJson = jsonDecode(Uri.decodeComponent(p['extra']!)) as Map;
         const keyMap = <String, String>{
-          'scMaxEachPostBytes': 'max-upload-size',
-          'scMaxConcurrentPosts': 'max-concurrent-uploads',
+          'scMaxEachPostBytes': 'sc-max-each-post-bytes',
+          'scMinPostsIntervalMs': 'sc-min-posts-interval-ms',
+          'noGRPCHeader': 'no-grpc-header',
+          'xPaddingBytes': 'x-padding-bytes',
         };
         extraJson.forEach((k, v) {
-          final mapped = keyMap[k as String];
-          if (mapped != null) opts[mapped] = v;
+          final mapped = keyMap[k as String] ?? k as String;
+          opts[mapped] = v;
         });
       } catch (_) {}
     }
