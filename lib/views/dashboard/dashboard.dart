@@ -578,7 +578,9 @@ class _ProfilePageState extends ConsumerState<_ProfilePage> {
       await Future.delayed(const Duration(milliseconds: 800));
     }
     final groups = ref.read(groupsProvider);
-    final groupName = groups.isEmpty ? null : groups.first.name;
+    final selectorGroup = groups.isEmpty ? null :
+        groups.firstWhere((g) => g.type == GroupType.Selector, orElse: () => groups.first);
+    final groupName = selectorGroup?.name;
     if (groupName != null) {
       appController.changeProxyDebounce(groupName, proxyName);
     }
@@ -755,6 +757,7 @@ class _ProfilePageState extends ConsumerState<_ProfilePage> {
                     ),
                   )
                 : ListView.separated(
+                    padding: const EdgeInsets.only(bottom: 72),
                     itemCount: displayNames.length,
                     separatorBuilder: (_, __) => const Divider(height: 1),
                     itemBuilder: (context, i) {

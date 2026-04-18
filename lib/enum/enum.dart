@@ -330,6 +330,7 @@ enum PageLabel {
   requests,
   resources,
   connections,
+  store,
 }
 
 enum RuleAction {

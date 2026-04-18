@@ -55,6 +55,12 @@ class Navigation {
         builder: (_) => const ToolsView(key: GlobalObjectKey(PageLabel.tools)),
         modes: [NavigationItemMode.desktop, NavigationItemMode.mobile],
       ),
+      NavigationItem(
+        icon: Icon(Icons.storefront_outlined),
+        label: PageLabel.store,
+        builder: (_) => const StoreView(key: GlobalObjectKey(PageLabel.store)),
+        modes: [NavigationItemMode.desktop, NavigationItemMode.mobile],
+      ),
     ];
   }
 
