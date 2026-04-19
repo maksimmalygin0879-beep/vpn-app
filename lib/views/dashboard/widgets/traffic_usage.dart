@@ -13,7 +13,7 @@ class TrafficUsage extends ConsumerWidget {
     final currentProfile = ref.watch(currentProfileProvider);
     final sub = currentProfile?.subscriptionInfo;
 
-    final downBytes = totalTraffic.down;
+    final downBytes = totalTraffic.down.toInt();
     final subTotal = sub?.total ?? 0;
     final subUsed = (sub?.upload ?? 0) + (sub?.download ?? 0);
 
