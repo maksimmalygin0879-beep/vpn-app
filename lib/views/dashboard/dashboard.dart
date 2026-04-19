@@ -39,7 +39,10 @@ class _DashboardViewState extends ConsumerState<DashboardView> {
   @override
   void initState() {
     super.initState();
-    _pageController = PageController();
+    final profiles = ref.read(profilesProvider);
+    final currentId = ref.read(currentProfileIdProvider);
+    final idx = profiles.indexWhere((p) => p.id == currentId);
+    _pageController = PageController(initialPage: idx >= 0 ? idx : 0);
   }
 
   @override
@@ -584,7 +587,9 @@ class _ProfilePageState extends ConsumerState<_ProfilePage> {
     if (groupName != null) {
       appController.changeProxyDebounce(groupName, proxyName);
     }
-    appController.updateStatus(true);
+    if (!ref.read(isStartProvider)) {
+      appController.updateStatus(true);
+    }
   }
 
   Future<void> _ping() async {
