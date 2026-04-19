@@ -14,13 +14,24 @@ Uint8List? convertSubscriptionToClash(Uint8List bytes) {
 
   final decoded = _tryBase64Decode(text);
   if (decoded != null) {
-    final links = decoded
+    // Try newline-separated first, then space-separated
+    var links = decoded
         .split(RegExp(r'[\r\n]+'))
         .map((l) => l.trim())
         .where((l) => l.isNotEmpty && _isProxyLink(l))
         .toList();
+    if (links.isEmpty) {
+      links = decoded
+          .split(RegExp(r'\s+'))
+          .where(_isProxyLink)
+          .toList();
+    }
     if (links.isNotEmpty) return _multiLinksToClash(links);
   }
+
+  // Fallback: plain-text subscription — extract proxy links from whitespace-delimited tokens
+  final plainLinks = text.split(RegExp(r'\s+')).where(_isProxyLink).toList();
+  if (plainLinks.isNotEmpty) return _multiLinksToClash(plainLinks);
 
   return null;
 }

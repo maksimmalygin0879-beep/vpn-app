@@ -1,6 +1,7 @@
 import 'package:honey_utility/enum/enum.dart';
 import 'package:honey_utility/models/models.dart';
 import 'package:honey_utility/views/views.dart';
+import 'package:honey_utility/views/profiles/catalog.dart';
 import 'package:flutter/material.dart';
 
 class Navigation {
@@ -18,20 +19,12 @@ class Navigation {
         builder: (_) =>
             const DashboardView(key: GlobalObjectKey(PageLabel.dashboard)),
       ),
-      NavigationItem(
-        icon: const Icon(Icons.article),
-        label: PageLabel.proxies,
-        builder: (_) =>
-            const ProxiesView(key: GlobalObjectKey(PageLabel.proxies)),
-        modes: hasProxies
-            ? [NavigationItemMode.mobile, NavigationItemMode.desktop]
-            : [],
-      ),
+
       NavigationItem(
         icon: Icon(Icons.folder),
         label: PageLabel.profiles,
         builder: (_) =>
-            const ProfilesView(key: GlobalObjectKey(PageLabel.profiles)),
+            const ProfileCatalogView(key: GlobalObjectKey(PageLabel.profiles)),
       ),
 
       NavigationItem(

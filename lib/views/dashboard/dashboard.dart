@@ -921,24 +921,24 @@ class _SubscriptionBar extends StatelessWidget {
           if (hasTraffic) ...[
             Row(
               children: [
-                Expanded(
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(3),
-                    child: LinearProgressIndicator(
-                      value: progress,
-                      minHeight: 5,
-                      backgroundColor: context.colorScheme.surfaceContainerHighest,
-                      color: progress == null
-                          ? context.colorScheme.primary
-                          : progress > 0.9
-                              ? context.colorScheme.error
-                              : progress > 0.7
-                                  ? context.colorScheme.tertiary
-                                  : context.colorScheme.primary,
+                if (!isUnlimited) ...[
+                  Expanded(
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(3),
+                      child: LinearProgressIndicator(
+                        value: progress,
+                        minHeight: 5,
+                        backgroundColor: context.colorScheme.surfaceContainerHighest,
+                        color: progress != null && progress > 0.9
+                            ? context.colorScheme.error
+                            : progress != null && progress > 0.7
+                                ? context.colorScheme.tertiary
+                                : context.colorScheme.primary,
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(width: 8),
+                  const SizedBox(width: 8),
+                ],
                 Text(
                   '$usedStr / $totalStr',
                   style: context.textTheme.labelSmall?.copyWith(

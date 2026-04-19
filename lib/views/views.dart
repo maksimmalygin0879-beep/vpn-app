@@ -13,3 +13,5 @@ export 'proxies/proxies.dart';
 export 'resources.dart';
 export 'tools.dart';
 export 'store/store.dart';
+
+export 'profiles/catalog.dart';
