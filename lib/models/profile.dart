@@ -263,6 +263,7 @@ extension ProfileExtension on Profile {
       label: label.takeFirstValid([
         profileTitle,
         utils.getFileNameForDisposition(disposition),
+        Uri.tryParse(url)?.host,
         id.toString(),
       ]),
       subscriptionInfo: SubscriptionInfo.formHString(userinfo, webPageUrl: webPageUrl),
